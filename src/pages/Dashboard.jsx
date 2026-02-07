@@ -1,4 +1,4 @@
-import { useAuth } from '../hooks/useAuth.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { Link } from 'react-router-dom';
 

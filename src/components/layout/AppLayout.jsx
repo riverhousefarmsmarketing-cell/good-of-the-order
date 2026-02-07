@@ -1,11 +1,11 @@
-import { useAuth } from '../../hooks/useAuth.jsx';
-import { useOrganization } from '../../hooks/useOrganization.jsx';
+import { useAuth } from '../../hooks/useAuth';
+import { useOrganization } from '../../hooks/useOrganization';
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: '□' },
-  { path: '/minutes', label: 'Minutes', icon: '≡' },
   { path: '/agendas', label: 'Agendas', icon: '☰' },
+  { path: '/minutes', label: 'Minutes', icon: '≡' },
   { path: '/events', label: 'Events', icon: '◇' },
   { path: '/members', label: 'Members', icon: '○' },
 ];

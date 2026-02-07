@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import { useMembers } from '../hooks/useMembers.jsx';
 
 const ROLES = [

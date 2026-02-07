@@ -1,66 +1,73 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-/**
- * Hook for authentication state and current user profile.
- * Returns user, profile (with org), loading state, and auth actions.
- */
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const profileFetched = useRef(false);
+
+  const fetchProfile = useCallback(async (userId) => {
+    // Prevent duplicate fetches
+    if (profileFetched.current) return;
+    profileFetched.current = true;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*, organization:organizations(*)')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Profile fetch error:', error);
+        setProfile(null);
+      } else {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error('Profile fetch exception:', err);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Listen for auth changes
+    // Only use onAuthStateChange — it fires INITIAL_SESSION on load
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+      (_event, session) => {
+        if (!mounted) return;
+
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          fetchProfile(currentUser.id);
         } else {
+          profileFetched.current = false;
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          organization:organizations(*)
-        `)
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        setProfile(null);
-      } else {
-        setProfile(data);
+    // Safety timeout — never spin forever
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth timeout — forcing loading=false');
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
+  }, [fetchProfile]);
 
   const signUp = useCallback(async ({ email, password, fullName, organizationName, organizationSlug }) => {
     const { data, error } = await supabase.auth.signUp({
@@ -92,6 +99,7 @@ export function useAuth() {
   }, []);
 
   const signIn = useCallback(async ({ email, password }) => {
+    profileFetched.current = false; // Allow fresh fetch on login
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -100,6 +108,7 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
+    profileFetched.current = false;
     const { error } = await supabase.auth.signOut();
     if (!error) {
       setUser(null);

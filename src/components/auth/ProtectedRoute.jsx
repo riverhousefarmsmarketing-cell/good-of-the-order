@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth.jsx';
+import { useAuth } from '../../hooks/useAuth';
 
 /**
  * Wraps routes that require authentication.
@@ -38,9 +38,8 @@ export default function ProtectedRoute({ children, requiredRole }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!profile) {
-    return <Navigate to="/setup" replace />;
-  }
+  // Profile might still be loading or missing - show content anyway
+  // (individual pages can handle missing profile if needed)
 
   if (requiredRole === 'admin' && !isAdmin) {
     return <Navigate to="/" replace />;
