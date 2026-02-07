@@ -1,13 +1,16 @@
-import { useAuth } from '../../hooks/useAuth';
-import { useOrganization } from '../../hooks/useOrganization';
+import { useAuth } from '../../hooks/useAuth.js';
+import { useOrganization } from '../../hooks/useOrganization.jsx';
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: '□' },
   { path: '/agendas', label: 'Agendas', icon: '☰' },
-  { path: '/minutes', label: 'Minutes', icon: '≡' },
+  { path: '/minutes/new', label: 'Minutes', icon: '≡', activePath: '/minutes/new' },
+  { path: '/minutes', label: 'Archive', icon: '▤', activePath: '/minutes', exact: true },
   { path: '/events', label: 'Events', icon: '◇' },
   { path: '/members', label: 'Members', icon: '○' },
+  { path: '/distribution', label: 'Distribution', icon: '✉' },
+  { path: '/email-history', label: 'Email Log', icon: '↗' },
 ];
 
 export default function AppLayout({ children }) {
@@ -64,9 +67,17 @@ export default function AppLayout({ children }) {
         {/* Nav links */}
         <div style={{ display: 'flex', gap: 2, flex: 1 }}>
           {NAV_ITEMS.map((item) => {
-            const isActive = item.path === '/'
-              ? location.pathname === '/'
-              : location.pathname.startsWith(item.path);
+            let isActive;
+            if (item.exact) {
+              // Archive: active on /minutes and /minutes/:id (but not /minutes/new)
+              isActive = location.pathname === '/minutes' || (location.pathname.startsWith('/minutes/') && location.pathname !== '/minutes/new');
+            } else if (item.activePath) {
+              isActive = location.pathname === item.activePath;
+            } else if (item.path === '/') {
+              isActive = location.pathname === '/';
+            } else {
+              isActive = location.pathname.startsWith(item.path);
+            }
             return (
               <Link
                 key={item.path}

@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { useMinutes } from '../hooks/useMinutes.jsx';
 import { useMembers } from '../hooks/useMembers.jsx';
+import { useOrganization } from '../hooks/useOrganization.jsx';
+import { supabase } from '../lib/supabase';
+import SendEmailModal from '../components/email/SendEmailModal.jsx';
+import { downloadMinutesPDF } from '../utils/generateMinutesPDF';
 
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
@@ -26,12 +30,26 @@ export default function MinutesEditPage() {
   const { profile } = useAuth();
   const { fetchFullMinutes, saveMinutes, deleteMinutes } = useMinutes();
   const { members } = useMembers();
+  const { organization } = useOrganization();
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState([]);
+  const [upcomingDbEvents, setUpcomingDbEvents] = useState([]);
+  const [linkedEvents, setLinkedEvents] = useState([]);
+  const [subcommittees, setSubcommittees] = useState([]);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [distributionLogs, setDistributionLogs] = useState([]);
 
   const isNew = !id;
+
+  // Fetch subcommittees for the dropdown
+  useEffect(() => {
+    if (!profile?.organization_id) return;
+    supabase.from('subcommittees').select('id, name, is_active')
+      .eq('organization_id', profile.organization_id).eq('is_active', true).order('name')
+      .then(({ data }) => setSubcommittees(data || []));
+  }, [profile?.organization_id]);
 
   useEffect(() => {
     if (isNew) {
@@ -45,6 +63,7 @@ export default function MinutesEditPage() {
         agenda_changes: '', agenda_approval_motion: emptyMotion, agenda_no_motion: false,
         previous_meeting_dates: '', minutes_approval_motion: emptyMotion, minutes_no_motion: false,
         total_donations_ytd: '', donations_since_last_meeting: '', current_account_balance: '',
+        accounts: [],
         financial_report_motion: emptyMotion, financial_no_motion: false,
         correspondence: '',
         presidents_report: '', presidents_report_motion: emptyMotion, presidents_report_no_motion: true,
@@ -76,6 +95,54 @@ export default function MinutesEditPage() {
       });
     }
   }, [id, isNew, fetchFullMinutes, navigate]);
+
+  // Fetch next 6 upcoming events + events linked to this minutes
+  useEffect(() => {
+    if (!draft) return;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Board meetings: show ALL next 6 upcoming events
+    // Subcommittee meetings: show next 6 events for THAT subcommittee
+    let query = supabase
+      .from('events')
+      .select('id, name, date, time, location, subcommittee_id, subcommittees(name)')
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .limit(6);
+
+    if (draft.meeting_type === 'SUBCOMMITTEE' && draft.subcommittee_id) {
+      query = query.eq('subcommittee_id', draft.subcommittee_id);
+    }
+
+    query.then(({ data }) => setUpcomingDbEvents(data || []));
+
+    // Events created from this minutes record
+    if (draft.id && !draft.id.startsWith('_tmp_')) {
+      supabase
+        .from('events')
+        .select('id, name, date, time, location')
+        .eq('source_minutes_id', draft.id)
+        .order('date', { ascending: true })
+        .then(({ data }) => setLinkedEvents(data || []));
+    }
+  }, [draft?.id, draft?.meeting_type]);
+
+  // Fetch distribution logs for PDF export
+  useEffect(() => {
+    if (!draft?.id || draft.id.startsWith('_tmp_')) return;
+    supabase
+      .from('distribution_logs')
+      .select('id, sent_at, recipient_emails, email_subject, sent_by, profiles!distribution_logs_sent_by_fkey(full_name)')
+      .eq('document_type', 'minutes')
+      .eq('document_id', draft.id)
+      .order('sent_at', { ascending: false })
+      .then(({ data }) => {
+        setDistributionLogs((data || []).map(d => ({
+          ...d,
+          sent_by_profile: d.profiles || null,
+        })));
+      });
+  }, [draft?.id, showSendModal]);
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
@@ -124,11 +191,13 @@ export default function MinutesEditPage() {
 
   const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '[Not provided]';
 
+  const isSC = draft.meeting_type === 'SUBCOMMITTEE';
+
   const tabs = [
     { id: 'meeting-info', label: 'Meeting Info' },
     { id: 'attendance', label: 'Attendance' },
-    { id: 'financial', label: 'Financial' },
-    { id: 'reports', label: 'Reports' },
+    ...(isSC ? [] : [{ id: 'financial', label: 'Financial' }]),
+    ...(isSC ? [] : [{ id: 'reports', label: 'Reports' }]),
     { id: 'business', label: 'Business' },
     { id: 'preview', label: 'Preview' },
   ];
@@ -138,8 +207,8 @@ export default function MinutesEditPage() {
       {/* Header */}
       <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => navigate('/minutes')} style={{ padding: '7px 14px', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>← Back</button>
-          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: '#1e293b' }}>{isNew ? 'Create' : 'Edit'} Minutes</h1>
+          {!isNew && <button onClick={() => navigate('/minutes')} style={{ padding: '7px 14px', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>← Back</button>}
+          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: '#1e293b' }}>{isNew ? 'New Meeting Minutes' : 'Edit Minutes'}</h1>
           <span style={{
             padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
             background: draft.status === 'approved' ? '#dcfce7' : '#fef3c7',
@@ -153,6 +222,12 @@ export default function MinutesEditPage() {
           </button>
           {draft.status !== 'approved' && (
             <button onClick={handleFinalize} style={{ padding: '8px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Finalize</button>
+          )}
+          {draft.status === 'approved' && !isNew && (
+            <>
+              <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>📄 PDF</button>
+              <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
+            </>
           )}
         </div>
       </div>
@@ -184,7 +259,15 @@ export default function MinutesEditPage() {
             <Card title="Basic Information">
               <Row>
                 <Field label="Meeting Type *">
-                  <select value={draft.meeting_type} onChange={e => u('meeting_type', e.target.value)} style={sel}>
+                  <select value={draft.meeting_type} onChange={e => {
+                    const newType = e.target.value;
+                    u('meeting_type', newType);
+                    // Reset to safe tab if current tab is board-only
+                    if (newType === 'SUBCOMMITTEE' && (activeTab === 'financial' || activeTab === 'reports')) {
+                      setActiveTab('meeting-info');
+                    }
+                    if (newType !== 'SUBCOMMITTEE') u('subcommittee_id', null);
+                  }} style={sel}>
                     {MEETING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </Field>
@@ -192,6 +275,14 @@ export default function MinutesEditPage() {
                   <input type="date" value={draft.meeting_date || ''} onChange={e => u('meeting_date', e.target.value)} style={inp} />
                 </Field>
               </Row>
+              {isSC && (
+                <Field label="Subcommittee *">
+                  <select value={draft.subcommittee_id || ''} onChange={e => u('subcommittee_id', e.target.value || null)} style={sel}>
+                    <option value="">Select subcommittee...</option>
+                    {subcommittees.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </Field>
+              )}
               <Row>
                 <Field label="Meeting Time *">
                   <input type="text" value={draft.meeting_time || ''} onChange={e => u('meeting_time', e.target.value)} placeholder="e.g., 7:00 PM" style={inp} />
@@ -201,7 +292,7 @@ export default function MinutesEditPage() {
                 </Field>
               </Row>
               <Row>
-                <Field label="Facilitator/President *">
+                <Field label={isSC ? 'Chair *' : 'Facilitator/President *'}>
                   <select value={draft.facilitator_id || ''} onChange={e => u('facilitator_id', e.target.value || null)} style={sel}>
                     <option value="">Select...</option>
                     {members.map(m => <option key={m.id} value={m.id}>{fmtMember(m.id)}</option>)}
@@ -222,13 +313,17 @@ export default function MinutesEditPage() {
                   <input type="text" value={draft.time_adjourned || ''} onChange={e => u('time_adjourned', e.target.value)} placeholder="e.g., 8:30 PM" style={inp} />
                 </Field>
               </Row>
-              <Field label="Invocation">
-                <textarea value={draft.invocation || ''} onChange={e => u('invocation', e.target.value)} placeholder="Invocation text or 'Invocation was given.'" style={ta} />
-              </Field>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 8 }}>
-                <input type="checkbox" checked={draft.pledge_recited} onChange={e => u('pledge_recited', e.target.checked)} />
-                <span style={{ fontSize: 14, color: '#374151' }}>Pledge of Allegiance was recited</span>
-              </label>
+              {!isSC && (
+                <>
+                  <Field label="Invocation">
+                    <textarea value={draft.invocation || ''} onChange={e => u('invocation', e.target.value)} placeholder="Invocation text or 'Invocation was given.'" style={ta} />
+                  </Field>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 8 }}>
+                    <input type="checkbox" checked={draft.pledge_recited} onChange={e => u('pledge_recited', e.target.checked)} />
+                    <span style={{ fontSize: 14, color: '#374151' }}>Pledge of Allegiance was recited</span>
+                  </label>
+                </>
+              )}
             </Card>
 
             <Card title="Agenda & Previous Minutes">
@@ -288,9 +383,37 @@ export default function MinutesEditPage() {
                 <input type="text" value={draft.donations_since_last_meeting || ''} onChange={e => u('donations_since_last_meeting', e.target.value)} placeholder="0.00" style={inp} />
               </Field>
             </Row>
-            <Field label="Current Account Balance">
-              <input type="text" value={draft.current_account_balance || ''} onChange={e => u('current_account_balance', e.target.value)} placeholder="0.00" style={inp} />
-            </Field>
+
+            {/* Multi-Account Balances */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Account Balances</span>
+                <button onClick={() => u('accounts', [...(draft.accounts || []), { _id: genTempId(), name: '', balance: '' }])} style={addBtn}>+ Add Account</button>
+              </div>
+              {(draft.accounts || []).length === 0 ? (
+                <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#f9fafb', borderRadius: 6 }}>No accounts added. Click "+ Add Account" to track account balances.</div>
+              ) : (
+                (draft.accounts || []).map((acct, i) => (
+                  <div key={acct.id || acct._id || i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input type="text" value={acct.name} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], name: e.target.value }; u('accounts', a); }} placeholder="Account name (e.g., Checking, Savings, PAC)" style={{ ...inp, flex: 1 }} />
+                    <input type="text" value={acct.balance} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], balance: e.target.value }; u('accounts', a); }} placeholder="Balance" style={{ ...inp, width: 140 }} />
+                    <button onClick={() => u('accounts', draft.accounts.filter((_, idx) => idx !== i))} style={delBtn}>×</button>
+                  </div>
+                ))
+              )}
+              {(draft.accounts || []).length > 0 && (
+                <div style={{ marginTop: 8, fontSize: 13, color: '#64748b', textAlign: 'right' }}>
+                  Total: ${(draft.accounts || []).reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0).toFixed(2)}
+                </div>
+              )}
+            </div>
+
+            {/* Legacy single balance field for backward compat */}
+            {draft.current_account_balance && !(draft.accounts || []).length && (
+              <Field label="Current Account Balance (Legacy)" style={{ marginTop: 16 }}>
+                <input type="text" value={draft.current_account_balance || ''} onChange={e => u('current_account_balance', e.target.value)} placeholder="0.00" style={inp} />
+              </Field>
+            )}
 
             <div style={{ marginTop: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -324,8 +447,8 @@ export default function MinutesEditPage() {
           </Card>
         )}
 
-        {/* ===== REPORTS ===== */}
-        {activeTab === 'reports' && (
+        {/* ===== REPORTS (Board/Annual only) ===== */}
+        {activeTab === 'reports' && !isSC && (
           <>
             <Card title="Correspondence">
               <textarea value={draft.correspondence || ''} onChange={e => u('correspondence', e.target.value)} placeholder="List correspondence or write 'None'" style={{ ...ta, minHeight: 80 }} />
@@ -440,31 +563,79 @@ export default function MinutesEditPage() {
                 </div>
               ))}
             </Card>
+
+            {/* Events Created From This Meeting */}
+            <Card title="Events From This Meeting">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                {draft.id && !draft.id.startsWith('_tmp_') && (
+                  <Link
+                    to={`/events/new?minutesId=${draft.id}&meetingType=${draft.meeting_type}${draft.subcommittee_id ? `&subcommitteeId=${draft.subcommittee_id}` : ''}`}
+                    style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, textDecoration: 'none' }}
+                  >+ Create Event</Link>
+                )}
+                {(!draft.id || draft.id.startsWith('_tmp_')) && (
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>Save minutes first to create events</span>
+                )}
+              </div>
+              {linkedEvents.length === 0 ? (
+                <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No events created from this meeting yet.</div>
+              ) : (
+                linkedEvents.map(e => (
+                  <Link key={e.id} to={`/events/${e.id}`} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid #f1f5f9', textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ fontSize: 12, color: '#64748b', minWidth: 80 }}>{e.date ? new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'}</div>
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{e.name}</div>
+                    <div style={{ fontSize: 12, color: '#64748b' }}>{e.location || 'TBD'}</div>
+                    <span style={{ color: '#9ca3af' }}>→</span>
+                  </Link>
+                ))
+              )}
+            </Card>
+
+            {/* Next 6 Upcoming Events - Board: all events, Subcommittee: filtered to that subcommittee */}
+            {upcomingDbEvents.length > 0 && (
+              <Card title={draft.meeting_type === 'SUBCOMMITTEE' ? 'Next 6 Committee Events' : 'Next 6 Upcoming Events'}>
+                {upcomingDbEvents.map(e => (
+                  <div key={e.id} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <div style={{ color: '#64748b', minWidth: 80 }}>{e.date ? new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'}</div>
+                    <div style={{ flex: 1, fontWeight: 500 }}>{e.name}</div>
+                    <div style={{ color: '#64748b' }}>{e.time || ''}</div>
+                    <div style={{ color: '#64748b' }}>{e.location || 'TBD'}</div>
+                    {e.subcommittees?.name && draft.meeting_type === 'BOARD' && <span style={{ fontSize: 11, padding: '2px 8px', background: '#f3e8ff', color: '#7c3aed', borderRadius: 10 }}>{e.subcommittees.name}</span>}
+                  </div>
+                ))}
+              </Card>
+            )}
           </>
         )}
 
         {/* ===== PREVIEW ===== */}
         {activeTab === 'preview' && (
           <Card>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ textAlign: organization?.logo_position || 'center', marginBottom: 24 }}>
+              {organization?.logo_url && (
+                <img src={organization.logo_url} alt={organization?.name || 'Logo'} style={{ maxHeight: 80, maxWidth: 240, objectFit: 'contain', marginBottom: 12 }} />
+              )}
               <h1 style={{ fontSize: 20, color: '#1e293b', fontWeight: 600, margin: '0 0 4px' }}>
-                {MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes
+                {isSC
+                  ? `${subcommittees.find(s => s.id === draft.subcommittee_id)?.name || 'Subcommittee'} Meeting Minutes`
+                  : `${MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes`
+                }
               </h1>
-              <div style={{ color: '#64748b', fontSize: 14 }}>Lewis County Farm Bureau</div>
+              <div style={{ color: '#64748b', fontSize: 14 }}>{organization?.name || 'Organization'}</div>
             </div>
 
             <PreviewSection title="Meeting Information">
               <PLine label="Date" value={fmtDate(draft.meeting_date)} />
               <PLine label="Time" value={draft.meeting_time} />
               <PLine label="Location" value={draft.location} />
-              <PLine label="Facilitator" value={fmtMember(draft.facilitator_id)} />
+              <PLine label={isSC ? 'Chair' : 'Facilitator'} value={fmtMember(draft.facilitator_id)} />
               <PLine label="Recorder" value={fmtMember(draft.recorder_id)} />
             </PreviewSection>
 
             <PreviewSection title="Call to Order">
               <PLine label="Called to Order" value={draft.time_called_to_order} />
-              <PLine label="Invocation" value={draft.invocation || 'Invocation was given.'} />
-              <PLine label="Pledge" value={draft.pledge_recited ? 'Pledge was recited.' : 'Not recited.'} />
+              {!isSC && <PLine label="Invocation" value={draft.invocation || 'Invocation was given.'} />}
+              {!isSC && <PLine label="Pledge" value={draft.pledge_recited ? 'Pledge was recited.' : 'Not recited.'} />}
             </PreviewSection>
 
             <PreviewSection title="Attendance">
@@ -475,21 +646,39 @@ export default function MinutesEditPage() {
               <PLine label="Quorum" value={QUORUM_OPTIONS.find(q => q.value === draft.quorum)?.label} />
             </PreviewSection>
 
+            {!isSC && (
             <PreviewSection title="Financial Report">
               <PLine label="Total Donations (YTD)" value={draft.total_donations_ytd ? `$${draft.total_donations_ytd}` : null} />
               <PLine label="Donations Since Last Meeting" value={draft.donations_since_last_meeting ? `$${draft.donations_since_last_meeting}` : null} />
-              <PLine label="Account Balance" value={draft.current_account_balance ? `$${draft.current_account_balance}` : null} />
+              {(draft.accounts || []).length > 0 ? (
+                <>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginTop: 8, marginBottom: 4 }}>Account Balances:</div>
+                  {draft.accounts.map((a, i) => (
+                    <div key={i} style={{ fontSize: 14, marginLeft: 16 }}>{a.name}: ${a.balance || '0.00'}</div>
+                  ))}
+                  <div style={{ fontSize: 14, marginLeft: 16, fontWeight: 600, marginTop: 4 }}>
+                    Total: ${draft.accounts.reduce((s, a) => s + (parseFloat(a.balance) || 0), 0).toFixed(2)}
+                  </div>
+                </>
+              ) : (
+                <PLine label="Account Balance" value={draft.current_account_balance ? `$${draft.current_account_balance}` : null} />
+              )}
               <PreviewMotion motion={draft.financial_report_motion} noMotion={draft.financial_no_motion} />
             </PreviewSection>
+            )}
 
+            {!isSC && (
             <PreviewSection title="Correspondence">
               <div style={{ fontSize: 14 }}>{draft.correspondence || 'None'}</div>
             </PreviewSection>
+            )}
 
+            {!isSC && (
             <PreviewSection title="President's Report">
               <div style={{ fontSize: 14 }}>{draft.presidents_report || '[Not provided]'}</div>
               <PreviewMotion motion={draft.presidents_report_motion} noMotion={draft.presidents_report_no_motion} />
             </PreviewSection>
+            )}
 
             {draft.businessItems.filter(b => b.item_type === 'old').length > 0 && (
               <PreviewSection title="Old Business">
@@ -536,8 +725,85 @@ export default function MinutesEditPage() {
           </Card>
         )}
       </div>
+
+      {/* Send Email Modal */}
+      <SendEmailModal
+        open={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        documentType="minutes"
+        documentId={draft.id}
+        subject={`${MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes — ${fmtDate(draft.meeting_date)}`}
+        htmlBody={generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, organization)}
+        fromName={organization?.name || 'GoodOfTheOrder'}
+      />
     </div>
   );
+}
+
+// Generate email HTML from minutes draft
+function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, org) {
+  const mt = MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board';
+  const np = '[Not provided]';
+  const section = (title, content) => `<h3 style="color:#1e293b;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:20px 0 10px">${title}</h3>${content}`;
+  const line = (label, value) => `<div style="font-size:14px;line-height:1.8"><strong>${label}:</strong> ${value || np}</div>`;
+
+  let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
+  const logoAlign = org?.logo_position === 'left' ? 'left' : org?.logo_position === 'right' ? 'right' : 'center';
+  if (org?.logo_url) {
+    html += `<div style="text-align:${logoAlign};margin-bottom:16px"><img src="${org.logo_url}" alt="${org.name || ''}" style="max-height:80px;max-width:240px;object-fit:contain" /></div>`;
+  }
+  html += `<div style="text-align:${logoAlign};margin-bottom:24px"><h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Minutes</h1><div style="color:#64748b;font-size:14px">${org?.name || 'Organization'}</div></div>`;
+
+  html += section('Meeting Information',
+    line('Date', fmtDate(draft.meeting_date)) +
+    line('Time', draft.meeting_time) +
+    line('Location', draft.location) +
+    line(isSC ? 'Chair' : 'Facilitator', fmtMember(draft.facilitator_id)) +
+    line('Recorder', fmtMember(draft.recorder_id))
+  );
+
+  html += section('Call to Order', line('Called to Order', draft.time_called_to_order) +
+    (!isSC ? line('Invocation', draft.invocation || 'Invocation was given.') + line('Pledge', draft.pledge_recited ? 'Pledge was recited.' : 'Not recited.') : '')
+  );
+
+  const present = draft.attendance?.filter(a => a.status === 'present').map(a => fmtMember(a.member_id)).join(', ') || np;
+  const absent = draft.attendance?.filter(a => a.status === 'absent').map(a => fmtMember(a.member_id)).join(', ') || np;
+  html += section('Attendance', line('Present', present) + line('Absent', absent) + line('Guests', draft.guests) +
+    line('Quorum', QUORUM_OPTIONS.find(q => q.value === draft.quorum)?.label)
+  );
+
+  if (!isSC) {
+    let finContent = line('Total Donations (YTD)', draft.total_donations_ytd ? `$${draft.total_donations_ytd}` : null) +
+      line('Donations Since Last Meeting', draft.donations_since_last_meeting ? `$${draft.donations_since_last_meeting}` : null);
+    if ((draft.accounts || []).length > 0) {
+      finContent += '<div style="margin-top:8px"><strong>Account Balances:</strong></div>';
+      draft.accounts.forEach(a => { finContent += `<div style="margin-left:16px">${a.name}: $${a.balance || '0.00'}</div>`; });
+    }
+    html += section("Treasurer's Report", finContent);
+
+    if (draft.correspondence) html += section('Correspondence', `<div>${draft.correspondence}</div>`);
+    if (draft.presidents_report) html += section("President's Report", `<div>${draft.presidents_report}</div>`);
+  }
+
+  const oldBiz = (draft.businessItems || []).filter(b => b.item_type === 'old');
+  if (oldBiz.length > 0) {
+    html += section('Old Business', oldBiz.map(b => `<div style="margin-bottom:8px"><strong>${b.title}</strong>${b.discussion ? `<div style="margin-left:16px">${b.discussion}</div>` : ''}</div>`).join(''));
+  }
+  const newBiz = (draft.businessItems || []).filter(b => b.item_type === 'new');
+  if (newBiz.length > 0) {
+    html += section('New Business', newBiz.map(b => `<div style="margin-bottom:8px"><strong>${b.title}</strong>${b.discussion ? `<div style="margin-left:16px">${b.discussion}</div>` : ''}</div>`).join(''));
+  }
+
+  if (draft.good_of_the_order) html += section('Good of the Order', `<div>${draft.good_of_the_order}</div>`);
+
+  html += section('Adjournment', line('Time Adjourned', draft.time_adjourned));
+
+  if ((draft.actionItems || []).length > 0) {
+    html += section('Action Items', draft.actionItems.map(a => `<div>• ${a.task}${a.assignee_name ? ` (${a.assignee_name})` : ''}${a.due_date ? ` — Due: ${a.due_date}` : ''}</div>`).join(''));
+  }
+
+  html += '</div>';
+  return html;
 }
 
 // ===== SHARED STYLES =====

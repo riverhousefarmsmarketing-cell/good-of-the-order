@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
-import { OrganizationProvider } from './hooks/useOrganization';
+import { useAuth } from './hooks/useAuth.js';
+import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import LoginPage from './pages/Login';
 import SignupPage from './pages/Signup';
 import DashboardPage from './pages/Dashboard';
@@ -10,6 +10,10 @@ import MinutesArchivePage from './pages/MinutesArchive';
 import MinutesEditPage from './pages/MinutesEdit';
 import AgendasListPage from './pages/AgendasList';
 import AgendaEditPage from './pages/AgendaEdit';
+import EventsListPage from './pages/EventsList';
+import EventEditPage from './pages/EventEdit';
+import DistributionListPage from './pages/DistributionList';
+import EmailHistoryPage from './pages/EmailHistory';
 import AppLayout from './components/layout/AppLayout';
 
 function ProtectedLayout() {
@@ -71,9 +75,12 @@ export default function App() {
           <Route path="agendas" element={<AgendasListPage />} />
           <Route path="agendas/new" element={<AgendaEditPage />} />
           <Route path="agendas/:id" element={<AgendaEditPage />} />
-          <Route path="events" element={<PlaceholderPage title="Events" />} />
-          <Route path="events/:id" element={<PlaceholderPage title="Edit Event" />} />
+          <Route path="events" element={<EventsListPage />} />
+          <Route path="events/new" element={<EventEditPage />} />
+          <Route path="events/:id" element={<EventEditPage />} />
           <Route path="members" element={<MembersPage />} />
+          <Route path="distribution" element={<DistributionListPage />} />
+          <Route path="email-history" element={<EmailHistoryPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -112,6 +112,7 @@ export function useMinutes() {
       total_donations_ytd: mainData.total_donations_ytd || null,
       donations_since_last_meeting: mainData.donations_since_last_meeting || null,
       current_account_balance: mainData.current_account_balance || null,
+      accounts: mainData.accounts || [],
       financial_report_motion: mainData.financial_report_motion || null,
       financial_no_motion: mainData.financial_no_motion ?? false,
       correspondence: mainData.correspondence || null,

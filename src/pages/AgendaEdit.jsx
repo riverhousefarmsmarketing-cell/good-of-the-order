@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
+import { useOrganization } from '../hooks/useOrganization.jsx';
+import SendEmailModal from '../components/email/SendEmailModal.jsx';
 
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
@@ -14,8 +16,10 @@ export default function AgendaEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas();
+  const { organization } = useOrganization();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
   const isNew = !id;
 
   useEffect(() => {
@@ -75,6 +79,9 @@ export default function AgendaEditPage() {
     u('items', items);
   };
 
+  const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  const mt = MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board';
+
   const inp = { width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' };
 
   return (
@@ -89,6 +96,9 @@ export default function AgendaEditPage() {
           {!isNew && <button onClick={handleDelete} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
           <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : 'Save'}</button>
           {draft.status === 'draft' && <button onClick={handleFinalize} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Finalize</button>}
+          {draft.status !== 'draft' && !isNew && (
+            <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
+          )}
           {draft.status !== 'draft' && <button onClick={() => navigate('/minutes/new?agendaId=' + draft.id)} style={{ padding: '8px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Create Minutes →</button>}
         </div>
       </div>
@@ -133,6 +143,39 @@ export default function AgendaEditPage() {
           ))}
         </div>
       </div>
+
+      {/* Send Email Modal */}
+      <SendEmailModal
+        open={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        documentType="agenda"
+        documentId={draft.id}
+        subject={`${mt} Meeting Agenda — ${fmtDate(draft.meeting_date)}`}
+        htmlBody={generateAgendaEmailHtml(draft, mt, fmtDate, organization)}
+        fromName={organization?.name || 'GoodOfTheOrder'}
+      />
     </div>
   );
+}
+
+function generateAgendaEmailHtml(draft, mt, fmtDate, org) {
+  let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
+  html += `<div style="text-align:center;margin-bottom:24px">`;
+  html += `<h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Agenda</h1>`;
+  html += `<div style="color:#64748b;font-size:14px">${org?.name || 'Lewis County Farm Bureau'}</div>`;
+  html += `</div>`;
+  html += `<div style="margin-bottom:20px;font-size:14px;line-height:1.8">`;
+  html += `<div><strong>Date:</strong> ${fmtDate(draft.meeting_date) || '[TBD]'}</div>`;
+  if (draft.meeting_time) html += `<div><strong>Time:</strong> ${draft.meeting_time}</div>`;
+  if (draft.location) html += `<div><strong>Location:</strong> ${draft.location}</div>`;
+  html += `</div>`;
+  html += `<h3 style="color:#1e293b;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:20px 0 12px">Agenda Items</h3>`;
+  html += `<ol style="margin:0;padding-left:20px;font-size:14px;line-height:2">`;
+  draft.items.forEach(item => {
+    html += `<li style="margin-bottom:4px"><strong>${item.title}</strong>`;
+    if (item.description) html += `<br><span style="color:#64748b;font-size:13px">${item.description}</span>`;
+    html += `</li>`;
+  });
+  html += `</ol></div>`;
+  return html;
 }

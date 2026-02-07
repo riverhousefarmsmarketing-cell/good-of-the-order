@@ -5,30 +5,24 @@ export function useAuth() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const profileFetched = useRef(false);
+  const fetchingRef = useRef(false);
 
   const fetchProfile = useCallback(async (userId) => {
-    // Prevent duplicate fetches
-    if (profileFetched.current) return;
-    profileFetched.current = true;
-
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*, organization:organizations(*)')
         .eq('id', userId)
         .maybeSingle();
-
-      if (error) {
-        console.error('Profile fetch error:', error);
-        setProfile(null);
-      } else {
-        setProfile(data);
-      }
+      if (error) console.error('Profile fetch error:', error);
+      setProfile(data || null);
     } catch (err) {
-      console.error('Profile fetch exception:', err);
+      console.error('Profile exception:', err);
       setProfile(null);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -36,28 +30,42 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // Only use onAuthStateChange — it fires INITIAL_SESSION on load
+    // 1. Check existing session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        setUser(session.user);
+        fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    // 2. Listen for changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         if (!mounted) return;
+        // Skip INITIAL_SESSION since getSession handles it
+        if (event === 'INITIAL_SESSION') return;
 
         const currentUser = session?.user ?? null;
         setUser(currentUser);
-
         if (currentUser) {
+          fetchingRef.current = false; // allow re-fetch on login
           fetchProfile(currentUser.id);
         } else {
-          profileFetched.current = false;
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
-    // Safety timeout — never spin forever
+    // 3. Safety timeout
     const timeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Auth timeout — forcing loading=false');
+        console.warn('Auth timeout - forcing loading=false');
         setLoading(false);
       }
     }, 5000);
@@ -71,62 +79,39 @@ export function useAuth() {
 
   const signUp = useCallback(async ({ email, password, fullName, organizationName, organizationSlug }) => {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          organization_name: organizationName,
-          organization_slug: organizationSlug,
-        },
-      },
+      email, password,
+      options: { data: { full_name: fullName, organization_name: organizationName, organization_slug: organizationSlug } },
     });
     return { data, error };
   }, []);
 
   const signUpWithInvite = useCallback(async ({ email, password, fullName, invitationToken }) => {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          invitation_token: invitationToken,
-        },
-      },
+      email, password,
+      options: { data: { full_name: fullName, invitation_token: invitationToken } },
     });
     return { data, error };
   }, []);
 
   const signIn = useCallback(async ({ email, password }) => {
-    profileFetched.current = false; // Allow fresh fetch on login
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    fetchingRef.current = false;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     return { data, error };
   }, []);
 
   const signOut = useCallback(async () => {
-    profileFetched.current = false;
+    fetchingRef.current = false;
     const { error } = await supabase.auth.signOut();
-    if (!error) {
-      setUser(null);
-      setProfile(null);
-    }
+    if (!error) { setUser(null); setProfile(null); }
     return { error };
   }, []);
 
   return {
-    user,
-    profile,
+    user, profile,
     organization: profile?.organization ?? null,
     loading,
     isAdmin: profile?.role === 'admin',
     isEditor: profile?.role === 'admin' || profile?.role === 'editor',
-    signUp,
-    signUpWithInvite,
-    signIn,
-    signOut,
+    signUp, signUpWithInvite, signIn, signOut,
   };
 }
