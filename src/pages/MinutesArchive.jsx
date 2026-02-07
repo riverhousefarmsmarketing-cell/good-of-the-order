@@ -55,8 +55,11 @@ const { toast } = useToast();
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ padding: 48, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center', color: '#94a3b8' }}>
-          No minutes found. Create your first meeting minutes to get started.
+        <div style={{ padding: 64, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>📄</div>
+          <div style={{ color: '#64748b', fontSize: 15, fontWeight: 500, marginBottom: 6 }}>No minutes found</div>
+          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>Create your first meeting minutes to start building your records archive.</div>
+          <Link to="/minutes/new" style={{ display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: 'white', borderRadius: 6, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>+ Create Minutes</Link>
         </div>
       ) : (
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>

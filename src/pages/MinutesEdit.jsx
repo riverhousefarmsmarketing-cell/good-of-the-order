@@ -26,6 +26,11 @@ const emptyMotion = { text: '', movedBy: '', secondedBy: '', decision: '', vote:
 
 function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8); }
 
+// BUG-019: Sanitize money input - allow digits, decimal, comma, leading $
+function sanitizeMoney(val) {
+  return val.replace(/[^0-9.,\-$]/g, '');
+}
+
 export default function MinutesEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -33,6 +38,7 @@ export default function MinutesEditPage() {
   const { fetchFullMinutes, saveMinutes, deleteMinutes } = useMinutes();
   const { members } = useMembers();
   const { organization } = useOrganization();
+  const isEditor = profile?.role === 'admin' || profile?.role === 'editor';
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -205,6 +211,17 @@ const { toast } = useToast();
     { id: 'preview', label: 'Preview' },
   ];
 
+  // Viewers cannot create new minutes
+  if (!isEditor && isNew) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+        <h2 style={{ color: '#1e293b', marginBottom: 8 }}>View-Only Access</h2>
+        <p>You don't have permission to create minutes. Contact an admin to upgrade your role.</p>
+        <button onClick={() => navigate('/minutes')} style={{ marginTop: 16, padding: '10px 20px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>← Back to Archive</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: '#f8fafc', minHeight: 'calc(100vh - 56px)' }}>
       {/* Header */}
@@ -219,6 +236,7 @@ const { toast } = useToast();
           }}>{draft.status}</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          {isEditor ? (<>
           {!isNew && <button onClick={() => setShowDeleteConfirm(true)} disabled={saving} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Delete</button>}
           <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
             {saving ? 'Saving...' : 'Save Draft'}
@@ -231,6 +249,9 @@ const { toast } = useToast();
               <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
               <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>
             </>
+          )}
+          </>) : (
+            <span style={{ fontSize: 13, color: '#94a3b8', alignSelf: 'center' }}>View only</span>
           )}
         </div>
       </div>
@@ -380,10 +401,10 @@ const { toast } = useToast();
           <Card title="Financial Summary">
             <Row>
               <Field label="Total Donations (YTD)">
-                <input type="text" value={draft.total_donations_ytd || ''} onChange={e => u('total_donations_ytd', e.target.value)} placeholder="0.00" style={inp} />
+                <input type="text" value={draft.total_donations_ytd || ''} onChange={e => u('total_donations_ytd', sanitizeMoney(e.target.value))} placeholder="0.00" style={inp} />
               </Field>
               <Field label="Donations Since Last Meeting">
-                <input type="text" value={draft.donations_since_last_meeting || ''} onChange={e => u('donations_since_last_meeting', e.target.value)} placeholder="0.00" style={inp} />
+                <input type="text" value={draft.donations_since_last_meeting || ''} onChange={e => u('donations_since_last_meeting', sanitizeMoney(e.target.value))} placeholder="0.00" style={inp} />
               </Field>
             </Row>
 
@@ -399,7 +420,7 @@ const { toast } = useToast();
                 (draft.accounts || []).map((acct, i) => (
                   <div key={acct.id || acct._id || i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                     <input type="text" value={acct.name} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], name: e.target.value }; u('accounts', a); }} placeholder="Account name (e.g., Checking, Savings, PAC)" style={{ ...inp, flex: 1 }} />
-                    <input type="text" value={acct.balance} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], balance: e.target.value }; u('accounts', a); }} placeholder="Balance" style={{ ...inp, width: 140 }} />
+                    <input type="text" value={acct.balance} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], balance: sanitizeMoney(e.target.value) }; u('accounts', a); }} placeholder="Balance" style={{ ...inp, width: 140 }} />
                     <button onClick={() => u('accounts', draft.accounts.filter((_, idx) => idx !== i))} style={delBtn}>×</button>
                   </div>
                 ))
@@ -414,7 +435,7 @@ const { toast } = useToast();
             {/* Legacy single balance field for backward compat */}
             {draft.current_account_balance && !(draft.accounts || []).length && (
               <Field label="Current Account Balance (Legacy)" style={{ marginTop: 16 }}>
-                <input type="text" value={draft.current_account_balance || ''} onChange={e => u('current_account_balance', e.target.value)} placeholder="0.00" style={inp} />
+                <input type="text" value={draft.current_account_balance || ''} onChange={e => u('current_account_balance', sanitizeMoney(e.target.value))} placeholder="0.00" style={inp} />
               </Field>
             )}
 
@@ -426,7 +447,7 @@ const { toast } = useToast();
               {draft.financialItems.filter(f => f.item_type === 'fundraising').map((f, i) => (
                 <div key={f.id || f._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Event name" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: e.target.value }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
                   <button onClick={() => u('financialItems', draft.financialItems.filter(x => x !== f))} style={delBtn}>×</button>
                 </div>
               ))}
@@ -440,7 +461,7 @@ const { toast } = useToast();
               {draft.financialItems.filter(f => f.item_type === 'expense').map((f, i) => (
                 <div key={f.id || f._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Description" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: e.target.value }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
                   <button onClick={() => u('financialItems', draft.financialItems.filter(x => x !== f))} style={delBtn}>×</button>
                 </div>
               ))}

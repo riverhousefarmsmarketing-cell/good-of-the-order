@@ -247,7 +247,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
             <Field label="Organization Name">
               <input type="text" value={form.name} onChange={e => updateForm('name', e.target.value)} style={inp} />
             </Field>
-            <Field label="Short Name (slug)" hint="Used in file naming. Cannot be changed.">
+            <Field label="Short Name (slug)" hint="Used in file naming. Contact support to change.">
               <input type="text" value={form.slug} disabled style={{ ...inp, background: '#f9fafb', color: '#94a3b8' }} />
             </Field>
             <Field label="Timezone">

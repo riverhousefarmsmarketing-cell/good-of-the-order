@@ -32,7 +32,7 @@ export function useAgendas() {
     ]);
 
     if (aErr || !agenda) return null;
-    return { ...agenda, items: items || [] };
+    return { ...agenda, _loaded_at: new Date().toISOString(), items: items || [] };
   }, []);
 
   const saveAgenda = useCallback(async (agendaData) => {
@@ -67,6 +67,13 @@ export function useAgendas() {
       if (error) throw error;
       agendaId = data.id;
     } else {
+      // Optimistic locking: check updated_at
+      if (agendaData._loaded_at) {
+        const { data: current } = await supabase.from('agendas').select('updated_at').eq('id', agendaId).maybeSingle();
+        if (current?.updated_at && new Date(current.updated_at) > new Date(agendaData._loaded_at)) {
+          throw new Error('This record was modified by another user. Please refresh and try again.');
+        }
+      }
       const { error } = await supabase.from('agendas').update(record).eq('id', agendaId);
       if (error) throw error;
     }

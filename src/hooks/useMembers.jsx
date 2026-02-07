@@ -81,8 +81,11 @@ export function useMembers() {
       .single();
 
     if (inviteError) throw inviteError;
+    
+    // BUG-018: Return data with invite link for manual sharing
+    // TODO: Add edge function to send invitation emails via Resend
     await fetchInvitations();
-    return data;
+    return { ...data, inviteUrl: `${window.location.origin}/signup?invite=${data.id}` };
   }, [fetchInvitations]);
 
   const cancelInvitation = useCallback(async (id) => {

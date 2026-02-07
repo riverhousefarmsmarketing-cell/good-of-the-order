@@ -98,8 +98,11 @@ const { toast } = useToast();
             </Section>
           )}
           {eventsList.length === 0 && (
-            <div style={{ padding: 48, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center', color: '#94a3b8' }}>
-              No events yet. Create one to get started.
+            <div style={{ padding: 64, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>📅</div>
+              <div style={{ color: '#64748b', fontSize: 15, fontWeight: 500, marginBottom: 6 }}>No events yet</div>
+              <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>Events can be created from meeting minutes or added directly.</div>
+              <Link to="/events/new" style={{ display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: 'white', borderRadius: 6, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>+ Create Event</Link>
             </div>
           )}
         </>

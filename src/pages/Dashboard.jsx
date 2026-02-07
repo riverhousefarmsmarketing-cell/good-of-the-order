@@ -98,6 +98,7 @@ export default function DashboardPage() {
       <div style={{
         display: 'flex', gap: 12, marginBottom: 28, padding: 16,
         background: 'white', border: '1px solid #e2e8f0', borderRadius: 8,
+        flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b', alignSelf: 'center', marginRight: 8 }}>
           Quick Actions
@@ -109,7 +110,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 28 }}>
         <StatCard label="Minutes" value={stats.minutes} to="/minutes" />
         <StatCard label="Agendas" value={stats.agendas} to="/agendas" />
         <StatCard label="Members" value={stats.members} to="/members" />
@@ -118,7 +119,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
         {/* Recent Minutes */}
         <Panel title="Recent Minutes" action={{ label: 'View All', to: '/minutes' }}>
           {loading ? (

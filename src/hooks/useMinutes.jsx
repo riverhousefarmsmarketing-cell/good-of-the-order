@@ -53,6 +53,7 @@ export function useMinutes() {
 
     return {
       ...mins,
+      _loaded_at: new Date().toISOString(),
       attendance: att || [],
       businessItems: biz || [],
       actionItems: actions || [],
@@ -149,6 +150,13 @@ export function useMinutes() {
       if (error) throw error;
       minutesId = data.id;
     } else {
+      // Optimistic locking: if caller passed _loaded_at, verify no one else saved since
+      if (minutesData._loaded_at) {
+        const { data: current } = await supabase.from('minutes').select('updated_at').eq('id', minutesId).maybeSingle();
+        if (current?.updated_at && new Date(current.updated_at) > new Date(minutesData._loaded_at)) {
+          throw new Error('This record was modified by another user. Please refresh and try again.');
+        }
+      }
       const { error } = await supabase.from('minutes').update(record).eq('id', minutesId);
       if (error) throw error;
     }

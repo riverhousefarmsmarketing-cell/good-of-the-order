@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
 import { Navigate, Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 const ORG_TYPES = [
   'Farm Bureau',
@@ -53,6 +54,17 @@ export default function SignupPage() {
     setStep(2);
   };
 
+  const [slugAvailable, setSlugAvailable] = useState(null);
+  const [checkingSlug, setCheckingSlug] = useState(false);
+
+  const checkSlugAvailability = async (slug) => {
+    if (!slug || slug.length < 3) { setSlugAvailable(null); return; }
+    setCheckingSlug(true);
+    const { data } = await supabase.from('organizations').select('id').eq('slug', slug).maybeSingle();
+    setSlugAvailable(!data);
+    setCheckingSlug(false);
+  };
+
   const handleStep2 = async (e) => {
     e.preventDefault();
     setError(null);
@@ -64,6 +76,11 @@ export default function SignupPage() {
 
     if (!/^[a-z0-9]{3,10}$/.test(form.organizationSlug)) {
       setError('Short name must be 3-10 lowercase letters/numbers only.');
+      return;
+    }
+
+    if (slugAvailable === false) {
+      setError('That short name is already taken. Please choose another.');
       return;
     }
 
@@ -236,11 +253,22 @@ export default function SignupPage() {
                 <input
                   type="text"
                   value={form.organizationSlug}
-                  onChange={(e) => updateForm('organizationSlug', e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 10))}
+                  onChange={(e) => {
+                    const val = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 10);
+                    updateForm('organizationSlug', val);
+                    setSlugAvailable(null);
+                  }}
+                  onBlur={() => checkSlugAvailability(form.organizationSlug)}
                   required
                   placeholder="lcfb"
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    borderColor: slugAvailable === false ? '#dc2626' : slugAvailable === true ? '#059669' : '#d1d5db',
+                  }}
                 />
+                {checkingSlug && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Checking availability...</div>}
+                {slugAvailable === false && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>This short name is already taken.</div>}
+                {slugAvailable === true && <div style={{ fontSize: 12, color: '#059669', marginTop: 4 }}>✓ Available</div>}
                 {form.organizationSlug && (
                   <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                     Files will be named like: <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>

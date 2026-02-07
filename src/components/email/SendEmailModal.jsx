@@ -99,10 +99,19 @@ export default function SendEmailModal({ open, onClose, documentType, documentId
   const clearAll = () => setSelectedEmails(new Set());
 
   // ─── Send ──────────────────────────────────────────────────────
+  const [lastSendTime, setLastSendTime] = useState(0);
+
   const handleSend = async () => {
     const recipients = Array.from(selectedEmails).filter(Boolean);
     if (recipients.length === 0) { setError('Select at least one recipient.'); return; }
     if (!subject.trim()) { setError('Subject is required.'); return; }
+
+    // BUG-011: Client-side rate limit
+    const now = Date.now();
+    if (now - lastSendTime < 10000) {
+      setError('Please wait a few seconds before sending again.');
+      return;
+    }
 
     setSending(true);
     setError(null);
@@ -116,6 +125,7 @@ export default function SendEmailModal({ open, onClose, documentType, documentId
         fromName,
       });
       setSent(true);
+      setLastSendTime(Date.now());
     } catch (err) {
       setError(err.message || 'Failed to send');
     }

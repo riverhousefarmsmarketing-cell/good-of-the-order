@@ -18,10 +18,13 @@ export function useAuth() {
         .eq('id', userId)
         .maybeSingle();
       if (error) console.error('Profile fetch error:', error);
-      setProfile(data || null);
+      // Only update state if still the current fetch (prevents race on rapid login/logout)
+      if (fetchingRef.current) {
+        setProfile(data || null);
+      }
     } catch (err) {
       console.error('Profile exception:', err);
-      setProfile(null);
+      if (fetchingRef.current) setProfile(null);
     } finally {
       fetchingRef.current = false;
       setLoading(false);

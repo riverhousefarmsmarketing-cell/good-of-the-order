@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 
 import { useToast } from '../components/ui/Toast';
@@ -19,6 +20,7 @@ export default function AgendaEditPage() {
   const navigate = useNavigate();
   const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas();
   const { organization } = useOrganization();
+  const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);

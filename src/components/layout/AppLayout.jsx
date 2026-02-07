@@ -6,15 +6,15 @@ const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: '□' },
   { path: '/agendas', label: 'Agendas', icon: '☰' },
   { path: '/minutes', label: 'Minutes', icon: '≡', exact: true },
-  { path: '/minutes/new', label: 'New', icon: '▤', activePath: '/minutes/new' },
+  { path: '/minutes/new', label: 'New', icon: '▤', activePath: '/minutes/new', minRole: 'editor' },
   { path: '/events', label: 'Events', icon: '◇' },
   { path: '/members', label: 'Members', icon: '○' },
-  { path: '/distribution', label: 'Distribution', icon: '✉' },
+  { path: '/distribution', label: 'Distribution', icon: '✉', minRole: 'editor' },
   { path: '/email-history', label: 'Email Log', icon: '↗' },
 ];
 
 export default function AppLayout({ children }) {
-  const { profile, signOut, isAdmin } = useAuth();
+  const { profile, signOut, isAdmin, isEditor } = useAuth();
   const { branding } = useOrganization();
   const location = useLocation();
 
@@ -30,14 +30,16 @@ export default function AppLayout({ children }) {
       <nav style={{
         background: navBg,
         color: 'white',
-        padding: '0 24px',
+        padding: '0 16px',
         display: 'flex',
         alignItems: 'center',
         height: 56,
         gap: 8,
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}>
         {/* Org branding */}
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'white', marginRight: 32 }}>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'white', marginRight: 24, flexShrink: 0 }}>
           {branding?.logoUrl ? (
             <img src={branding.logoUrl} alt="" style={{ height: 32, width: 32, objectFit: 'contain', borderRadius: 4 }} />
           ) : (
@@ -65,8 +67,13 @@ export default function AppLayout({ children }) {
         </Link>
 
         {/* Nav links */}
-        <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-          {NAV_ITEMS.map((item) => {
+        <div style={{ display: 'flex', gap: 2, flex: 1, flexShrink: 0 }}>
+          {NAV_ITEMS.filter(item => {
+            if (!item.minRole) return true;
+            if (item.minRole === 'editor') return isEditor;
+            if (item.minRole === 'admin') return isAdmin;
+            return true;
+          }).map((item) => {
             let isActive;
             if (item.exact) {
               // Archive: active on /minutes and /minutes/:id (but not /minutes/new)
@@ -148,9 +155,18 @@ export default function AppLayout({ children }) {
       </nav>
 
       {/* Page content */}
-      <main style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '0 8px' }}>
         {children}
       </main>
+      <style>{`
+        @media (max-width: 768px) {
+          nav a[style] { padding: 8px 10px !important; font-size: 12px !important; white-space: nowrap; }
+          main > div { padding-left: 12px !important; padding-right: 12px !important; }
+        }
+        @media (max-width: 480px) {
+          nav { height: 48px !important; }
+        }
+      `}</style>
     </div>
   );
 }

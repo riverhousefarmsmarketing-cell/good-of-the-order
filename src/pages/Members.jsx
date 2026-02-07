@@ -30,14 +30,21 @@ const { toast } = useToast();
   const activeMembers = members.filter((m) => m.is_active);
   const inactiveMembers = members.filter((m) => !m.is_active);
 
+  const [lastInviteUrl, setLastInviteUrl] = useState(null);
+
   const handleInvite = async () => {
     if (!inviteForm.email) return;
     setInviteError(null);
     setInviteSending(true);
     try {
-      await sendInvitation(inviteForm);
+      const result = await sendInvitation(inviteForm);
       setInviteForm({ email: '', role: 'editor', boardPosition: '' });
-      setShowInvite(false);
+      if (result?.inviteUrl) {
+        setLastInviteUrl(result.inviteUrl);
+      } else {
+        setShowInvite(false);
+      }
+      toast.success('Invitation created');
     } catch (err) {
       setInviteError(err.message);
     } finally {
@@ -444,6 +451,16 @@ const { toast } = useToast();
                 {inviteSending ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
+            {lastInviteUrl && (
+              <div style={{ marginTop: 16, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#166534', marginBottom: 6 }}>✓ Invitation created! Share this link:</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="text" readOnly value={lastInviteUrl} style={{ flex: 1, padding: 8, border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, background: 'white' }} />
+                  <button onClick={() => { navigator.clipboard.writeText(lastInviteUrl); toast.success('Link copied!'); }} style={{ padding: '8px 14px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>Email notification coming soon. For now, share this link manually.</div>
+              </div>
+            )}
           </div>
         </div>
       )}
