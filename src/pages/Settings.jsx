@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { supabase } from '../lib/supabase';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 const TABS = [
   { id: 'general', label: 'General' },
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+const [deleteScTarget, setDeleteScTarget] = useState(null);
 
   const [form, setForm] = useState({
     name: '', slug: '', timezone: '', fiscal_year_start: 1,
@@ -177,12 +179,12 @@ export default function SettingsPage() {
     setScSaving(false);
   };
 
-  const deleteSC = async (id) => {
-    if (!window.confirm('Delete this subcommittee?')) return;
-    const { error: err } = await supabase.from('subcommittees').delete().eq('id', id);
-    if (err) { setError(err.message); return; }
+  const deleteSC = async () => {
+    const { error: err } = await supabase.from('subcommittees').delete().eq('id', deleteScTarget);
+    if (err) { setError(err.message); setDeleteScTarget(null); return; }
     await fetchSubcommittees();
     setEditingSC(null);
+    setDeleteScTarget(null);
   };
 
   const toggleSCMember = (memberId) => {
@@ -524,7 +526,7 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
               <div>
                 {editingSC !== 'new' && (
-                  <button onClick={() => deleteSC(editingSC)} style={{
+                  <button onClick={() => setDeleteScTarget(editingSC)} style={{
                     padding: '10px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
                     borderRadius: 6, cursor: 'pointer', fontSize: 13,
                   }}>Delete</button>
@@ -543,6 +545,16 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteScTarget}
+        onClose={() => setDeleteScTarget(null)}
+        onConfirm={deleteSC}
+        title="Delete Subcommittee"
+        message="This will permanently delete this subcommittee."
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

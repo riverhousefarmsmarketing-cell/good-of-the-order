@@ -257,11 +257,11 @@ export async function downloadMinutesPDF(draft, members, organization, distribut
     }
 
     // Fundraising events
-    if ((draft.financialItems || []).filter(f => f.type === 'fundraising').length > 0) {
+    if ((draft.financialItems || []).filter(f => f.item_type === 'fundraising').length > 0) {
       check(20);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...TEXT);
       doc.text('Fundraising Events:', ML, y); y += 16;
-      draft.financialItems.filter(f => f.type === 'fundraising').forEach(evt => {
+      draft.financialItems.filter(f => f.item_type === 'fundraising').forEach(evt => {
         check(14); doc.setFont('helvetica', 'normal');
         doc.text(`${evt.name || evt.description || 'Event'}: $${evt.amount || '0.00'}`, ML + 16, y); y += 14;
       });
@@ -269,11 +269,11 @@ export async function downloadMinutesPDF(draft, members, organization, distribut
     }
 
     // Expenses
-    if ((draft.financialItems || []).filter(f => f.type === 'expense').length > 0) {
+    if ((draft.financialItems || []).filter(f => f.item_type === 'expense').length > 0) {
       check(20);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...TEXT);
       doc.text('Expenses:', ML, y); y += 16;
-      draft.financialItems.filter(f => f.type === 'expense').forEach(exp => {
+      draft.financialItems.filter(f => f.item_type === 'expense').forEach(exp => {
         check(14); doc.setFont('helvetica', 'normal');
         doc.text(`${exp.description || 'Expense'}: $${exp.amount || '0.00'}`, ML + 16, y); y += 14;
       });

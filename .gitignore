@@ -5,3 +5,9 @@ dist/
 .env.*.local
 *.log
 .DS_Store
+# Windows filesystem artifacts
+desktop.ini
+Thumbs.db
+
+# macOS artifacts
+.DS_Store

@@ -5,8 +5,8 @@ import { Link, useLocation } from 'react-router-dom';
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: '□' },
   { path: '/agendas', label: 'Agendas', icon: '☰' },
-  { path: '/minutes/new', label: 'Minutes', icon: '≡', activePath: '/minutes/new' },
-  { path: '/minutes', label: 'Archive', icon: '▤', activePath: '/minutes', exact: true },
+  { path: '/minutes', label: 'Minutes', icon: '≡', exact: true },
+  { path: '/minutes/new', label: 'New', icon: '▤', activePath: '/minutes/new' },
   { path: '/events', label: 'Events', icon: '◇' },
   { path: '/members', label: 'Members', icon: '○' },
   { path: '/distribution', label: 'Distribution', icon: '✉' },

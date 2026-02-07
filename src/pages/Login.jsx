@@ -52,7 +52,7 @@ export default function LoginPage() {
             <span style={{ color: 'white', fontWeight: 700, fontSize: 18 }}>GO</span>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: '0 0 4px' }}>
-            GoodOfTheOrder
+            Good of the Order
           </h1>
           <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
             Sign in to your organization
@@ -103,7 +103,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 8 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
                 Password
               </label>
@@ -123,6 +123,20 @@ export default function LoginPage() {
                   outline: 'none',
                 }}
               />
+            </div>
+
+            <div style={{ textAlign: 'right', marginBottom: 20 }}>
+              <Link
+                to="/forgot-password"
+                style={{
+                  fontSize: 13,
+                  color: '#1e40af',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <button

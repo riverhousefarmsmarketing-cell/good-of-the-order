@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useMembers } from '../hooks/useMembers.jsx';
+import { useToast } from '../components/ui/Toast';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 const ROLES = [
   { value: 'admin', label: 'Admin', desc: 'Full access, manage members & settings' },
@@ -22,6 +24,8 @@ export default function MembersPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'editor', boardPosition: '' });
   const [inviteError, setInviteError] = useState(null);
   const [inviteSending, setInviteSending] = useState(false);
+const { toast } = useToast();
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
 
   const activeMembers = members.filter((m) => m.is_active);
   const inactiveMembers = members.filter((m) => !m.is_active);
@@ -45,7 +49,7 @@ export default function MembersPage() {
     try {
       await updateMember(id, { [field]: value });
     } catch (err) {
-      alert('Error updating member: ' + err.message);
+      toast.error('Unable to update member. Please try again.');
     }
   };
 
@@ -257,11 +261,7 @@ export default function MembersPage() {
                           </button>
                           {!isCurrentUser && (
                             <button
-                              onClick={() => {
-                                if (window.confirm(`Deactivate ${member.full_name}?`)) {
-                                  deactivateMember(member.id);
-                                }
-                              }}
+                              onClick={() => setDeactivateTarget(member)}
                               style={{
                                 padding: '5px 10px', background: '#fef2f2',
                                 border: '1px solid #fecaca', borderRadius: 4,
@@ -447,6 +447,15 @@ export default function MembersPage() {
           </div>
         </div>
       )}
+<ConfirmDialog
+        open={!!deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={() => { deactivateMember(deactivateTarget.id); setDeactivateTarget(null); }}
+        title="Deactivate Member"
+        message={`Deactivate ${deactivateTarget?.full_name}? They will lose access.`}
+        confirmLabel="Deactivate"
+        variant="danger"
+      />
     </div>
   );
 }

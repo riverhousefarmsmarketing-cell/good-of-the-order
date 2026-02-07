@@ -5,6 +5,7 @@ export function useAuth() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingSlow, setLoadingSlow] = useState(false);
   const fetchingRef = useRef(false);
 
   const fetchProfile = useCallback(async (userId) => {
@@ -62,11 +63,11 @@ export function useAuth() {
       }
     );
 
-    // 3. Safety timeout
+    // 3. Safety timeout — show retry UI instead of forcing logged-out state
     const timeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Auth timeout - forcing loading=false');
-        setLoading(false);
+        console.warn('Auth timeout - showing retry UI');
+        setLoadingSlow(true);
       }
     }, 5000);
 
@@ -107,7 +108,7 @@ export function useAuth() {
   }, []);
 
   return {
-    user, profile,
+    user, profile, loadingSlow,
     organization: profile?.organization ?? null,
     loading,
     isAdmin: profile?.role === 'admin',

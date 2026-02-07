@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useEmail } from '../hooks/useEmail.jsx';
 import { useMembers } from '../hooks/useMembers.jsx';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 const GROUP_OPTIONS = ['Board', 'Committee', 'Staff', 'Guest', 'Other'];
 
@@ -12,6 +13,7 @@ export default function DistributionListPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [importMsg, setImportMsg] = useState(null);
+const [removeTarget, setRemoveTarget] = useState(null);
 
   const openEdit = (contact = null) => {
     setError(null);
@@ -34,10 +36,9 @@ export default function DistributionListPage() {
     setSaving(false);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this contact from the distribution list?')) return;
-    try { await deleteContact(id); if (editing === id) setEditing(null); }
-    catch (err) { setError(err.message); }
+  const handleRemove = async () => {
+    try { await deleteContact(removeTarget); if (editing === removeTarget) setEditing(null); setRemoveTarget(null); }
+    catch (err) { setError(err.message); setRemoveTarget(null); }
   };
 
   const handleImport = async () => {
@@ -120,7 +121,7 @@ export default function DistributionListPage() {
                   <div style={{ fontSize: 13, color: '#64748b' }}>{c.email}</div>
                 </div>
                 <button onClick={() => openEdit(c)} style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569' }}>Edit</button>
-                <button onClick={() => handleDelete(c.id)} style={{ padding: '6px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>×</button>
+                <button onClick={() => setRemoveTarget(c.id)} style={{ padding: '6px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>×</button>
               </div>
             ))}
           </div>
@@ -167,6 +168,15 @@ export default function DistributionListPage() {
           </div>
         </div>
       )}
+<ConfirmDialog
+        open={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={handleRemove}
+        title="Remove Contact"
+        message="Remove this contact from the distribution list?"
+        confirmLabel="Remove"
+        variant="danger"
+      />
     </div>
   );
 }

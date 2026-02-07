@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEvents } from '../hooks/useEvents.jsx';
+import { useToast } from '../components/ui/Toast';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 const PURPOSE_COLORS = {
   Education: '#dbeafe', Advocacy: '#fee2e2', Membership: '#dcfce7',
@@ -13,6 +15,8 @@ export default function EventsListPage() {
   const { eventsList, loading, deleteEvent } = useEvents();
   const [view, setView] = useState('list');
   const [calMonth, setCalMonth] = useState(new Date());
+const { toast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -30,11 +34,8 @@ export default function EventsListPage() {
   });
   const eventsForDay = (day) => monthEvents.filter(e => new Date(e.date + 'T12:00:00').getDate() === day);
 
-  const handleDelete = async (e, id) => {
-    e.preventDefault(); e.stopPropagation();
-    if (window.confirm('Delete this event?')) {
-      try { await deleteEvent(id); } catch (err) { alert('Error: ' + err.message); }
-    }
+  const handleDelete = async () => {
+    try { await deleteEvent(deleteTarget); setDeleteTarget(null); } catch (err) { toast.error('Unable to delete event.'); setDeleteTarget(null); }
   };
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading events...</div>;
@@ -88,12 +89,12 @@ export default function EventsListPage() {
         <>
           {upcoming.length > 0 && (
             <Section title={`Upcoming (${upcoming.length})`} color="#059669">
-              {upcoming.map(e => <EventRow key={e.id} event={e} onDelete={handleDelete} />)}
+             {upcoming.map(e => <EventRow key={e.id} event={e} onDelete={setDeleteTarget} />)}
             </Section>
           )}
           {past.length > 0 && (
             <Section title={`Past (${past.length})`} color="#64748b">
-              {past.slice(0, 10).map(e => <EventRow key={e.id} event={e} onDelete={handleDelete} faded />)}
+              {past.slice(0, 10).map(e => <EventRow key={e.id} event={e} onDelete={setDeleteTarget} faded />)}
             </Section>
           )}
           {eventsList.length === 0 && (
@@ -103,6 +104,16 @@ export default function EventsListPage() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Event"
+        message="This will permanently delete this event."
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
@@ -143,7 +154,7 @@ function EventRow({ event: e, onDelete, faded }) {
         </div>
       </div>
       {e.purpose && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: PURPOSE_COLORS[e.purpose] || '#f1f5f9', color: '#374151' }}>{e.purpose}</span>}
-      <button onClick={(ev) => onDelete(ev, e.id)} style={{
+      <button onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onDelete(e.id); }} style={{
         padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
         borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',
       }}>Delete</button>

@@ -6,6 +6,8 @@ import { useMembers } from '../hooks/useMembers.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { supabase } from '../lib/supabase';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
+import { useToast } from '../components/ui/Toast';
+import { ConfirmDialog } from '../components/ui/Modal';
 import { downloadMinutesPDF } from '../utils/generateMinutesPDF';
 
 const MEETING_TYPES = [
@@ -41,6 +43,8 @@ export default function MinutesEditPage() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [distributionLogs, setDistributionLogs] = useState([]);
 
+const { toast } = useToast();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isNew = !id;
 
   // Fetch subcommittees for the dropdown
@@ -155,7 +159,7 @@ export default function MinutesEditPage() {
       const newId = await saveMinutes({ ...draft, status: status || draft.status });
       if (isNew) navigate(`/minutes/${newId}`, { replace: true });
     } catch (err) {
-      alert('Error saving: ' + err.message);
+      toast.error(`Save failed: ${err.message || 'Please try again.'}`);
     } finally { setSaving(false); }
   };
 
@@ -172,7 +176,6 @@ export default function MinutesEditPage() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this minutes record?')) return;
     await deleteMinutes(draft.id);
     navigate('/minutes');
   };
@@ -216,17 +219,17 @@ export default function MinutesEditPage() {
           }}>{draft.status}</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          {!isNew && <button onClick={handleDelete} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
+          {!isNew && <button onClick={() => setShowDeleteConfirm(true)} disabled={saving} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Delete</button>}
           <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
             {saving ? 'Saving...' : 'Save Draft'}
           </button>
           {draft.status !== 'approved' && (
-            <button onClick={handleFinalize} style={{ padding: '8px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Finalize</button>
+            <button onClick={handleFinalize} disabled={saving} style={{ padding: '8px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Finalize</button>
           )}
           {draft.status === 'approved' && !isNew && (
             <>
-              <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>📄 PDF</button>
-              <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
+              <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
+              <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>
             </>
           )}
         </div>
@@ -725,7 +728,15 @@ export default function MinutesEditPage() {
           </Card>
         )}
       </div>
-
+<ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Minutes"
+        message="This will permanently delete this minutes record. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+      />
       {/* Send Email Modal */}
       <SendEmailModal
         open={showSendModal}
@@ -741,18 +752,22 @@ export default function MinutesEditPage() {
 }
 
 // Generate email HTML from minutes draft
+// HTML escape helpers (BUG-025: prevent XSS in email HTML)
+const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const escNl = (s) => esc(s).replace(/\n/g, '<br>');
+
 function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, org) {
   const mt = MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board';
   const np = '[Not provided]';
   const section = (title, content) => `<h3 style="color:#1e293b;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:20px 0 10px">${title}</h3>${content}`;
-  const line = (label, value) => `<div style="font-size:14px;line-height:1.8"><strong>${label}:</strong> ${value || np}</div>`;
+  const line = (label, value) => `<div style="font-size:14px;line-height:1.8"><strong>${label}:</strong> ${esc(value) || np}</div>`;
 
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
   const logoAlign = org?.logo_position === 'left' ? 'left' : org?.logo_position === 'right' ? 'right' : 'center';
   if (org?.logo_url) {
-    html += `<div style="text-align:${logoAlign};margin-bottom:16px"><img src="${org.logo_url}" alt="${org.name || ''}" style="max-height:80px;max-width:240px;object-fit:contain" /></div>`;
+    html += `<div style="text-align:${logoAlign};margin-bottom:16px"><img src="${org.logo_url}" alt="${esc(org.name || '')}" style="max-height:80px;max-width:240px;object-fit:contain" /></div>`;
   }
-  html += `<div style="text-align:${logoAlign};margin-bottom:24px"><h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Minutes</h1><div style="color:#64748b;font-size:14px">${org?.name || 'Organization'}</div></div>`;
+  html += `<div style="text-align:${logoAlign};margin-bottom:24px"><h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Minutes</h1><div style="color:#64748b;font-size:14px">${esc(org?.name || 'Organization')}</div></div>`;
 
   html += section('Meeting Information',
     line('Date', fmtDate(draft.meeting_date)) +
@@ -773,33 +788,33 @@ function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES
   );
 
   if (!isSC) {
-    let finContent = line('Total Donations (YTD)', draft.total_donations_ytd ? `$${draft.total_donations_ytd}` : null) +
-      line('Donations Since Last Meeting', draft.donations_since_last_meeting ? `$${draft.donations_since_last_meeting}` : null);
+    let finContent = line('Total Donations (YTD)', draft.total_donations_ytd ? `$${esc(draft.total_donations_ytd)}` : null) +
+      line('Donations Since Last Meeting', draft.donations_since_last_meeting ? `$${esc(draft.donations_since_last_meeting)}` : null);
     if ((draft.accounts || []).length > 0) {
       finContent += '<div style="margin-top:8px"><strong>Account Balances:</strong></div>';
-      draft.accounts.forEach(a => { finContent += `<div style="margin-left:16px">${a.name}: $${a.balance || '0.00'}</div>`; });
+      draft.accounts.forEach(a => { finContent += `<div style="margin-left:16px">${esc(a.name)}: $${esc(a.balance) || '0.00'}</div>`; });
     }
     html += section("Treasurer's Report", finContent);
 
-    if (draft.correspondence) html += section('Correspondence', `<div>${draft.correspondence}</div>`);
-    if (draft.presidents_report) html += section("President's Report", `<div>${draft.presidents_report}</div>`);
+    if (draft.correspondence) html += section('Correspondence', `<div>${escNl(draft.correspondence)}</div>`);
+    if (draft.presidents_report) html += section("President's Report", `<div>${escNl(draft.presidents_report)}</div>`);
   }
 
   const oldBiz = (draft.businessItems || []).filter(b => b.item_type === 'old');
   if (oldBiz.length > 0) {
-    html += section('Old Business', oldBiz.map(b => `<div style="margin-bottom:8px"><strong>${b.title}</strong>${b.discussion ? `<div style="margin-left:16px">${b.discussion}</div>` : ''}</div>`).join(''));
+    html += section('Old Business', oldBiz.map(b => `<div style="margin-bottom:8px"><strong>${esc(b.title)}</strong>${b.discussion ? `<div style="margin-left:16px">${escNl(b.discussion)}</div>` : ''}</div>`).join(''));
   }
   const newBiz = (draft.businessItems || []).filter(b => b.item_type === 'new');
   if (newBiz.length > 0) {
-    html += section('New Business', newBiz.map(b => `<div style="margin-bottom:8px"><strong>${b.title}</strong>${b.discussion ? `<div style="margin-left:16px">${b.discussion}</div>` : ''}</div>`).join(''));
+    html += section('New Business', newBiz.map(b => `<div style="margin-bottom:8px"><strong>${esc(b.title)}</strong>${b.discussion ? `<div style="margin-left:16px">${escNl(b.discussion)}</div>` : ''}</div>`).join(''));
   }
 
-  if (draft.good_of_the_order) html += section('Good of the Order', `<div>${draft.good_of_the_order}</div>`);
+  if (draft.good_of_the_order) html += section('Good of the Order', `<div>${escNl(draft.good_of_the_order)}</div>`);
 
   html += section('Adjournment', line('Time Adjourned', draft.time_adjourned));
 
   if ((draft.actionItems || []).length > 0) {
-    html += section('Action Items', draft.actionItems.map(a => `<div>• ${a.task}${a.assignee_name ? ` (${a.assignee_name})` : ''}${a.due_date ? ` — Due: ${a.due_date}` : ''}</div>`).join(''));
+    html += section('Action Items', draft.actionItems.map(a => `<div>• ${esc(a.task)}${a.assignee_name ? ` (${esc(a.assignee_name)})` : ''}${a.due_date ? ` — Due: ${esc(a.due_date)}` : ''}</div>`).join(''));
   }
 
   html += '</div>';

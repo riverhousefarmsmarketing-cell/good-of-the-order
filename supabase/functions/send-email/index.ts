@@ -1,6 +1,9 @@
 // supabase/functions/send-email/index.ts
-// Deploy: supabase functions deploy send-email --no-verify-jwt
-// Set secret: supabase secrets set RESEND_API_KEY=re_xxxxxxxx
+// Deploy: supabase functions deploy send-email
+// (NO --no-verify-jwt flag — JWT verification is now required)
+// Set secrets:
+//   supabase secrets set RESEND_API_KEY=re_xxxxxxxx
+//   supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -8,9 +11,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') || '*'
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,  // FIX BUG-021: was '*'
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -20,6 +24,28 @@ serve(async (req) => {
   }
 
   try {
+    // ── FIX BUG-012: Verify JWT / authenticate the caller ──────────────
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
+    // Create an authenticated client to verify the user
+    const supabaseAuth = createClient(SUPABASE_URL!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+    // ── End auth verification ──────────────────────────────────────────
+
     if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured')
 
     const {
@@ -38,11 +64,11 @@ serve(async (req) => {
     if (!html) throw new Error('No email body')
 
     // Send via Resend
-    // Resend free tier: 100 emails/day, onboarding domain
-const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`
+    const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`
 
-    // Resend supports batch sending up to 100 recipients
-    // For distribution lists, send as BCC for privacy
+    // ── FIX BUG-010: All recipients in BCC for privacy ────────────────
+    // Previously: to: [to[0]], bcc: to.slice(1) — exposed first recipient
+    // Now: send TO the org's own from address, ALL recipients as BCC
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -51,8 +77,8 @@ const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorde
       },
       body: JSON.stringify({
         from: fromEmail,
-        to: [to[0]],           // First recipient in TO
-        bcc: to.slice(1),      // Rest as BCC for privacy
+        to: [fromEmail.match(/<(.+)>/)?.[1] || 'notifications@goodoftheorder.app'],
+        bcc: to,              // ALL recipients as BCC
         subject,
         html,
       }),
@@ -65,14 +91,14 @@ const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorde
       throw new Error(resendData.message || 'Resend API error')
     }
 
-    // Log to distribution_logs
+    // Log to distribution_logs (using service role for reliable logging)
     if (organization_id && document_type && document_id) {
       const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!)
       await supabase.from('distribution_logs').insert({
         organization_id,
         document_type,
         document_id,
-        sent_by,
+        sent_by: sent_by || user.id,  // Fall back to authenticated user
         recipient_emails: to,
         email_subject: subject,
         delivery_status: 'sent',

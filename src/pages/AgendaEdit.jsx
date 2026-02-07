@@ -4,6 +4,8 @@ import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 
+import { useToast } from '../components/ui/Toast';
+import { ConfirmDialog } from '../components/ui/Modal';
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
   { value: 'ANNUAL', label: 'Annual' },
@@ -20,7 +22,10 @@ export default function AgendaEditPage() {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-  const isNew = !id;
+const { toast } = useToast();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+const isNew = !id;
 
   useEffect(() => {
     if (isNew) {
@@ -42,17 +47,16 @@ export default function AgendaEditPage() {
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
       if (isNew) navigate('/agendas/' + newId, { replace: true });
-    } catch (err) { alert('Error: ' + err.message); }
+    } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
     finally { setSaving(false); }
   };
 
   const handleFinalize = () => {
-    if (!draft.meeting_date) { alert('Please set a meeting date.'); return; }
+    if (!draft.meeting_date) { toast.warning('Please set a meeting date before finalizing.'); return; }
     handleSave('final');
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this agenda?')) return;
     await deleteAgenda(draft.id);
     navigate('/agendas');
   };
@@ -93,9 +97,9 @@ export default function AgendaEditPage() {
           <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: draft.status === 'sent' ? '#dcfce7' : draft.status === 'final' ? '#dbeafe' : '#fef3c7', color: draft.status === 'sent' ? '#166534' : draft.status === 'final' ? '#1e40af' : '#92400e' }}>{draft.status}</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          {!isNew && <button onClick={handleDelete} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
+          {!isNew && <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
           <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : 'Save'}</button>
-          {draft.status === 'draft' && <button onClick={handleFinalize} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Finalize</button>}
+          {draft.status === 'draft' && <button onClick={handleFinalize} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Finalize</button>}
           {draft.status !== 'draft' && !isNew && (
             <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
           )}
@@ -143,7 +147,16 @@ export default function AgendaEditPage() {
           ))}
         </div>
       </div>
-
+<ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Agenda"
+        message="This will permanently delete this agenda. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+      />
+         
       {/* Send Email Modal */}
       <SendEmailModal
         open={showSendModal}
@@ -158,22 +171,25 @@ export default function AgendaEditPage() {
   );
 }
 
+// HTML escape helper (BUG-025: prevent XSS in email HTML)
+const escA = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 function generateAgendaEmailHtml(draft, mt, fmtDate, org) {
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
   html += `<div style="text-align:center;margin-bottom:24px">`;
   html += `<h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Agenda</h1>`;
-  html += `<div style="color:#64748b;font-size:14px">${org?.name || 'Lewis County Farm Bureau'}</div>`;
+  html += `<div style="color:#64748b;font-size:14px">${escA(org?.name || 'Organization')}</div>`;
   html += `</div>`;
   html += `<div style="margin-bottom:20px;font-size:14px;line-height:1.8">`;
   html += `<div><strong>Date:</strong> ${fmtDate(draft.meeting_date) || '[TBD]'}</div>`;
-  if (draft.meeting_time) html += `<div><strong>Time:</strong> ${draft.meeting_time}</div>`;
-  if (draft.location) html += `<div><strong>Location:</strong> ${draft.location}</div>`;
+  if (draft.meeting_time) html += `<div><strong>Time:</strong> ${escA(draft.meeting_time)}</div>`;
+  if (draft.location) html += `<div><strong>Location:</strong> ${escA(draft.location)}</div>`;
   html += `</div>`;
   html += `<h3 style="color:#1e293b;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:20px 0 12px">Agenda Items</h3>`;
   html += `<ol style="margin:0;padding-left:20px;font-size:14px;line-height:2">`;
   draft.items.forEach(item => {
-    html += `<li style="margin-bottom:4px"><strong>${item.title}</strong>`;
-    if (item.description) html += `<br><span style="color:#64748b;font-size:13px">${item.description}</span>`;
+    html += `<li style="margin-bottom:4px"><strong>${escA(item.title)}</strong>`;
+    if (item.description) html += `<br><span style="color:#64748b;font-size:13px">${escA(item.description)}</span>`;
     html += `</li>`;
   });
   html += `</ol></div>`;

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMinutes } from '../hooks/useMinutes.jsx';
+import { useToast } from '../components/ui/Toast';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
@@ -17,15 +19,13 @@ const STATUS_COLORS = {
 export default function MinutesArchivePage() {
   const { minutesList, loading, deleteMinutes } = useMinutes();
   const [filter, setFilter] = useState('all');
+const { toast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const filtered = minutesList.filter(m => filter === 'all' || m.meeting_type === filter);
 
-  const handleDelete = async (e, id) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (window.confirm('Delete this minutes record?')) {
-      try { await deleteMinutes(id); } catch (err) { alert('Error: ' + err.message); }
-    }
+ const handleDelete = async () => {
+    try { await deleteMinutes(deleteTarget); setDeleteTarget(null); } catch (err) { toast.error('Unable to delete minutes.'); setDeleteTarget(null); }
   };
 
   const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -81,7 +81,7 @@ export default function MinutesArchivePage() {
                 padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
                 ...(STATUS_COLORS[m.status] || STATUS_COLORS.draft),
               }}>{m.status}</span>
-              <button onClick={(e) => handleDelete(e, m.id)} style={{
+             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
                 padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
                 borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',
               }}>Delete</button>
@@ -90,6 +90,15 @@ export default function MinutesArchivePage() {
           ))}
         </div>
       )}
+<ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Minutes"
+        message="This will permanently delete this minutes record."
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
