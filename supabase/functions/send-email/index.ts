@@ -11,10 +11,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') || '*'
+const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
+if (!ALLOWED_ORIGIN) {
+  console.warn('ALLOWED_ORIGIN not set — defaulting to restrictive same-origin. Set this env var for production.')
+}
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,  // FIX BUG-021: was '*'
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN || 'https://goodoftheorder.app',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 

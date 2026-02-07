@@ -60,8 +60,14 @@ export default function SignupPage() {
   const checkSlugAvailability = async (slug) => {
     if (!slug || slug.length < 3) { setSlugAvailable(null); return; }
     setCheckingSlug(true);
-    const { data } = await supabase.from('organizations').select('id').eq('slug', slug).maybeSingle();
-    setSlugAvailable(!data);
+    // BUG-009 fix: Use RPC function that bypasses RLS for unauthenticated users
+    const { data, error } = await supabase.rpc('check_slug_available', { check_slug: slug });
+    if (error) {
+      console.error('Slug check error:', error);
+      setSlugAvailable(null);
+    } else {
+      setSlugAvailable(data === true);
+    }
     setCheckingSlug(false);
   };
 
@@ -91,6 +97,7 @@ export default function SignupPage() {
       fullName: form.fullName,
       organizationName: form.organizationName,
       organizationSlug: form.organizationSlug,
+      organizationType: form.organizationType,
     });
 
     if (signUpError) {

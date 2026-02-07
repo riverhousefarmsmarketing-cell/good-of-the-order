@@ -37,6 +37,8 @@ export default function AppLayout({ children }) {
         gap: 8,
         overflowX: 'auto',
         WebkitOverflowScrolling: 'touch',
+        position: 'relative', // BUG-022: for mobile scroll fade
+        '--nav-bg': navBg,
       }}>
         {/* Org branding */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'white', marginRight: 24, flexShrink: 0 }}>
@@ -165,6 +167,17 @@ export default function AppLayout({ children }) {
         }
         @media (max-width: 480px) {
           nav { height: 48px !important; }
+          /* BUG-022: Add scroll fade indicator for mobile nav overflow */
+          nav::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 32px;
+            pointer-events: none;
+            background: linear-gradient(to right, transparent, var(--nav-bg, #1e293b));
+          }
         }
       `}</style>
     </div>

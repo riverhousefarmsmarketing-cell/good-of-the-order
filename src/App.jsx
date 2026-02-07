@@ -48,6 +48,33 @@ function ProtectedLayout() {
 
   if (!user) return <Navigate to="/login" replace />;
 
+  // BUG-013: Check email verification
+  if (user && !user.email_confirmed_at) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', background: '#f8fafc',
+        fontFamily: "'Inter', -apple-system, sans-serif",
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: 400, padding: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%', background: '#fef3c7',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px', fontSize: 24,
+          }}>✉</div>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: '#1e293b', margin: '0 0 8px' }}>Check your email</h2>
+          <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
+            We sent a verification link to <strong>{user.email}</strong>. Please verify your email to continue.
+          </p>
+          <button onClick={() => window.location.reload()} style={{
+            marginTop: 16, padding: '10px 24px', background: '#1e293b',
+            color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14,
+          }}>I've verified — refresh</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <OrganizationProvider organization={organization}>
       <AppLayout>

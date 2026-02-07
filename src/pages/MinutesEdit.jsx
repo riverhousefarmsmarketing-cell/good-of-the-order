@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { useMinutes } from '../hooks/useMinutes.jsx';
@@ -42,15 +42,30 @@ export default function MinutesEditPage() {
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = React.useRef(false); // BUG-021: synchronous guard against double-submit
   const [errors, setErrors] = useState([]);
   const [upcomingDbEvents, setUpcomingDbEvents] = useState([]);
   const [linkedEvents, setLinkedEvents] = useState([]);
   const [subcommittees, setSubcommittees] = useState([]);
   const [showSendModal, setShowSendModal] = useState(false);
   const [distributionLogs, setDistributionLogs] = useState([]);
+  const [scMemberIds, setScMemberIds] = useState(null); // BUG-025: subcommittee member IDs
 
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // BUG-023: Warn on unsaved changes when navigating away
+  const [isDirty, setIsDirty] = useState(false);
+  React.useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // Mark dirty on any draft change (after initial load)
+  const uWithDirty = (field, value) => { setIsDirty(true); u(field, value); };
+
   const isNew = !id;
 
   // Fetch subcommittees for the dropdown
@@ -109,6 +124,18 @@ const { toast } = useToast();
   // Fetch next 6 upcoming events + events linked to this minutes
   useEffect(() => {
     if (!draft) return;
+
+    // BUG-025: Fetch subcommittee members for attendance filtering
+    if (draft.meeting_type === 'SUBCOMMITTEE' && draft.subcommittee_id) {
+      supabase.from('subcommittee_members').select('member_id')
+        .eq('subcommittee_id', draft.subcommittee_id)
+        .then(({ data }) => {
+          setScMemberIds(data ? data.map(d => d.member_id) : null);
+        });
+    } else {
+      setScMemberIds(null);
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
     // Board meetings: show ALL next 6 upcoming events
@@ -135,7 +162,7 @@ const { toast } = useToast();
         .order('date', { ascending: true })
         .then(({ data }) => setLinkedEvents(data || []));
     }
-  }, [draft?.id, draft?.meeting_type]);
+  }, [draft?.id, draft?.meeting_type, draft?.subcommittee_id]);
 
   // Fetch distribution logs for PDF export
   useEffect(() => {
@@ -159,14 +186,18 @@ const { toast } = useToast();
   const u = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
 
   const handleSave = async (status) => {
+    // BUG-021: Synchronous double-submit guard
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setErrors([]);
     try {
       const newId = await saveMinutes({ ...draft, status: status || draft.status });
+      setIsDirty(false); // BUG-023: Clear dirty flag on success
       if (isNew) navigate(`/minutes/${newId}`, { replace: true });
     } catch (err) {
       toast.error(`Save failed: ${err.message || 'Please try again.'}`);
-    } finally { setSaving(false); }
+    } finally { setSaving(false); savingRef.current = false; }
   };
 
   const handleFinalize = async () => {
@@ -368,7 +399,14 @@ const { toast } = useToast();
           <Card title="Attendance">
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Mark Attendance</div>
-              {members.filter(m => m.is_active).map(m => {
+              {members.filter(m => {
+                if (!m.is_active) return false;
+                // BUG-025: Filter to subcommittee members when applicable
+                if (isSC && scMemberIds && scMemberIds.length > 0) {
+                  return scMemberIds.includes(m.id);
+                }
+                return true;
+              }).map(m => {
                 const st = getAttStatus(m.id);
                 return (
                   <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -446,8 +484,8 @@ const { toast } = useToast();
               </div>
               {draft.financialItems.filter(f => f.item_type === 'fundraising').map((f, i) => (
                 <div key={f.id || f._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Event name" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.findIndex(x => (x.id || x._id) === (f.id || f._id)); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Event name" style={{ ...inp, flex: 1 }} />
+                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.findIndex(x => (x.id || x._id) === (f.id || f._id)); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
                   <button onClick={() => u('financialItems', draft.financialItems.filter(x => x !== f))} style={delBtn}>×</button>
                 </div>
               ))}
@@ -460,8 +498,8 @@ const { toast } = useToast();
               </div>
               {draft.financialItems.filter(f => f.item_type === 'expense').map((f, i) => (
                 <div key={f.id || f._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Description" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.indexOf(f); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={f.description} onChange={e => { const items = [...draft.financialItems]; const idx = items.findIndex(x => (x.id || x._id) === (f.id || f._id)); items[idx] = { ...f, description: e.target.value }; u('financialItems', items); }} placeholder="Description" style={{ ...inp, flex: 1 }} />
+                  <input type="text" value={f.amount} onChange={e => { const items = [...draft.financialItems]; const idx = items.findIndex(x => (x.id || x._id) === (f.id || f._id)); items[idx] = { ...f, amount: sanitizeMoney(e.target.value) }; u('financialItems', items); }} placeholder="Amount" style={{ ...inp, width: 120 }} />
                   <button onClick={() => u('financialItems', draft.financialItems.filter(x => x !== f))} style={delBtn}>×</button>
                 </div>
               ))}
@@ -528,9 +566,9 @@ const { toast } = useToast();
                 <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>No old business items</div>
               ) : draft.businessItems.filter(b => b.item_type === 'old').map((item, i) => (
                 <div key={item.id || item._id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 12 }}>
-                  <input type="text" value={item.title} onChange={e => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, title: e.target.value }; u('businessItems', items); }} placeholder="Business item title" style={{ ...inp, fontWeight: 500, marginBottom: 8 }} />
-                  <textarea value={item.discussion || ''} onChange={e => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, discussion: e.target.value }; u('businessItems', items); }} placeholder="Discussion notes..." style={ta} />
-                  <MotionBlock label="Motion" motion={item.motion || emptyMotion} onChange={m => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, motion: m }; u('businessItems', items); }} noMotion={item.no_motion} onNoMotionChange={v => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, no_motion: v }; u('businessItems', items); }} />
+                  <input type="text" value={item.title} onChange={e => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, title: e.target.value }; u('businessItems', items); }} placeholder="Business item title" style={{ ...inp, fontWeight: 500, marginBottom: 8 }} />
+                  <textarea value={item.discussion || ''} onChange={e => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, discussion: e.target.value }; u('businessItems', items); }} placeholder="Discussion notes..." style={ta} />
+                  <MotionBlock label="Motion" motion={item.motion || emptyMotion} onChange={m => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, motion: m }; u('businessItems', items); }} noMotion={item.no_motion} onNoMotionChange={v => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, no_motion: v }; u('businessItems', items); }} />
                   <button onClick={() => u('businessItems', draft.businessItems.filter(x => x !== item))} style={{ marginTop: 10, ...delBtnText }}>Remove</button>
                 </div>
               ))}
@@ -544,9 +582,9 @@ const { toast } = useToast();
                 <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>No new business items</div>
               ) : draft.businessItems.filter(b => b.item_type === 'new').map((item, i) => (
                 <div key={item.id || item._id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 12 }}>
-                  <input type="text" value={item.title} onChange={e => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, title: e.target.value }; u('businessItems', items); }} placeholder="Business item title" style={{ ...inp, fontWeight: 500, marginBottom: 8 }} />
-                  <textarea value={item.discussion || ''} onChange={e => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, discussion: e.target.value }; u('businessItems', items); }} placeholder="Discussion notes..." style={ta} />
-                  <MotionBlock label="Motion" motion={item.motion || emptyMotion} onChange={m => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, motion: m }; u('businessItems', items); }} noMotion={item.no_motion} onNoMotionChange={v => { const items = [...draft.businessItems]; const idx = items.indexOf(item); items[idx] = { ...item, no_motion: v }; u('businessItems', items); }} />
+                  <input type="text" value={item.title} onChange={e => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, title: e.target.value }; u('businessItems', items); }} placeholder="Business item title" style={{ ...inp, fontWeight: 500, marginBottom: 8 }} />
+                  <textarea value={item.discussion || ''} onChange={e => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, discussion: e.target.value }; u('businessItems', items); }} placeholder="Discussion notes..." style={ta} />
+                  <MotionBlock label="Motion" motion={item.motion || emptyMotion} onChange={m => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, motion: m }; u('businessItems', items); }} noMotion={item.no_motion} onNoMotionChange={v => { const items = [...draft.businessItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, no_motion: v }; u('businessItems', items); }} />
                   <button onClick={() => u('businessItems', draft.businessItems.filter(x => x !== item))} style={{ marginTop: 10, ...delBtnText }}>Remove</button>
                 </div>
               ))}
@@ -558,9 +596,9 @@ const { toast } = useToast();
               </div>
               {draft.upcomingEvents.map((evt) => (
                 <div key={evt.id || evt._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input type="text" value={evt.name} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.indexOf(evt); evts[idx] = { ...evt, name: e.target.value }; u('upcomingEvents', evts); }} placeholder="Event name" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={evt.date || ''} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.indexOf(evt); evts[idx] = { ...evt, date: e.target.value }; u('upcomingEvents', evts); }} placeholder="Date" style={{ ...inp, width: 120 }} />
-                  <input type="text" value={evt.location || ''} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.indexOf(evt); evts[idx] = { ...evt, location: e.target.value }; u('upcomingEvents', evts); }} placeholder="Location" style={{ ...inp, width: 150 }} />
+                  <input type="text" value={evt.name} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.findIndex(x => (x.id || x._id) === (evt.id || evt._id)); evts[idx] = { ...evt, name: e.target.value }; u('upcomingEvents', evts); }} placeholder="Event name" style={{ ...inp, flex: 1 }} />
+                  <input type="text" value={evt.date || ''} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.findIndex(x => (x.id || x._id) === (evt.id || evt._id)); evts[idx] = { ...evt, date: e.target.value }; u('upcomingEvents', evts); }} placeholder="Date" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={evt.location || ''} onChange={e => { const evts = [...draft.upcomingEvents]; const idx = evts.findIndex(x => (x.id || x._id) === (evt.id || evt._id)); evts[idx] = { ...evt, location: e.target.value }; u('upcomingEvents', evts); }} placeholder="Location" style={{ ...inp, width: 150 }} />
                   <button onClick={() => u('upcomingEvents', draft.upcomingEvents.filter(x => x !== evt))} style={delBtn}>×</button>
                 </div>
               ))}
@@ -580,9 +618,9 @@ const { toast } = useToast();
               </div>
               {draft.actionItems.map((item) => (
                 <div key={item.id || item._id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input type="text" value={item.task} onChange={e => { const items = [...draft.actionItems]; const idx = items.indexOf(item); items[idx] = { ...item, task: e.target.value }; u('actionItems', items); }} placeholder="Task description" style={{ ...inp, flex: 1 }} />
-                  <input type="text" value={item.assignee_name || ''} onChange={e => { const items = [...draft.actionItems]; const idx = items.indexOf(item); items[idx] = { ...item, assignee_name: e.target.value }; u('actionItems', items); }} placeholder="Assignee" style={{ ...inp, width: 150 }} />
-                  <input type="text" value={item.due_date || ''} onChange={e => { const items = [...draft.actionItems]; const idx = items.indexOf(item); items[idx] = { ...item, due_date: e.target.value }; u('actionItems', items); }} placeholder="Due date" style={{ ...inp, width: 120 }} />
+                  <input type="text" value={item.task} onChange={e => { const items = [...draft.actionItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, task: e.target.value }; u('actionItems', items); }} placeholder="Task description" style={{ ...inp, flex: 1 }} />
+                  <input type="text" value={item.assignee_name || ''} onChange={e => { const items = [...draft.actionItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, assignee_name: e.target.value }; u('actionItems', items); }} placeholder="Assignee" style={{ ...inp, width: 150 }} />
+                  <input type="text" value={item.due_date || ''} onChange={e => { const items = [...draft.actionItems]; const idx = items.findIndex(x => (x.id || x._id) === (item.id || item._id)); items[idx] = { ...item, due_date: e.target.value }; u('actionItems', items); }} placeholder="Due date" style={{ ...inp, width: 120 }} />
                   <button onClick={() => u('actionItems', draft.actionItems.filter(x => x !== item))} style={delBtn}>×</button>
                 </div>
               ))}
@@ -785,8 +823,10 @@ function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES
 
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
   const logoAlign = org?.logo_position === 'left' ? 'left' : org?.logo_position === 'right' ? 'right' : 'center';
-  if (org?.logo_url) {
-    html += `<div style="text-align:${logoAlign};margin-bottom:16px"><img src="${org.logo_url}" alt="${esc(org.name || '')}" style="max-height:80px;max-width:240px;object-fit:contain" /></div>`;
+  // BUG-032: Only embed logo if URL starts with https://
+  const safeLogoUrl = org?.logo_url && org.logo_url.startsWith('https://') ? org.logo_url : null;
+  if (safeLogoUrl) {
+    html += `<div style="text-align:${logoAlign};margin-bottom:16px"><img src="${esc(safeLogoUrl)}" alt="${esc(org.name || '')}" style="max-height:80px;max-width:240px;object-fit:contain" /></div>`;
   }
   html += `<div style="text-align:${logoAlign};margin-bottom:24px"><h1 style="font-size:20px;color:#1e293b;margin:0 0 4px">${mt} Meeting Minutes</h1><div style="color:#64748b;font-size:14px">${esc(org?.name || 'Organization')}</div></div>`;
 

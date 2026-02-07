@@ -83,7 +83,7 @@ const { toast } = useToast();
               <span style={{
                 padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
                 ...(STATUS_COLORS[m.status] || STATUS_COLORS.draft),
-              }}>{m.status}</span>
+              }}>{m.status === 'approved' ? 'Approved' : m.status === 'review' ? 'In Review' : 'Draft'}</span>
              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
                 padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
                 borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',

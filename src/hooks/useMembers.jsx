@@ -9,6 +9,7 @@ export function useMembers() {
 
   const fetchMembers = useCallback(async () => {
     try {
+      // BUG-029: RLS handles org isolation, but explicit filter is defense-in-depth
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('*')

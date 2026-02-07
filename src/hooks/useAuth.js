@@ -81,10 +81,10 @@ export function useAuth() {
     };
   }, [fetchProfile]);
 
-  const signUp = useCallback(async ({ email, password, fullName, organizationName, organizationSlug }) => {
+  const signUp = useCallback(async ({ email, password, fullName, organizationName, organizationSlug, organizationType }) => {
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name: fullName, organization_name: organizationName, organization_slug: organizationSlug } },
+      options: { data: { full_name: fullName, organization_name: organizationName, organization_slug: organizationSlug, organization_type: organizationType } },
     });
     return { data, error };
   }, []);

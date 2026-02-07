@@ -11,3 +11,10 @@ Thumbs.db
 
 # macOS artifacts
 .DS_Store
+
+# Supabase local temp
+supabase/.temp/
+
+# IDE
+.vscode/
+.idea/

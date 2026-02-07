@@ -48,6 +48,11 @@ export function useMinutes() {
       supabase.from('minutes_upcoming_events').select('*').eq('minutes_id', id),
     ]);
 
+    // BUG-028: Check all errors, not just the main query
+    const errors = [mErr, aErr, bErr, acErr, fErr, uErr].filter(Boolean);
+    if (errors.length > 0) {
+      console.error('Error fetching minutes data:', errors);
+    }
     if (mErr) { console.error('Error fetching minutes:', mErr); return null; }
     if (!mins) return null;
 
@@ -87,6 +92,14 @@ export function useMinutes() {
     const isNew = !minutesId || !(await supabase.from('minutes').select('id').eq('id', minutesId).maybeSingle()).data;
 
     // Clean the main record
+    // BUG-017/027: Parse money fields to proper numbers for DECIMAL columns
+    const parseMoney = (val) => {
+      if (val === null || val === undefined || val === '') return null;
+      const cleaned = String(val).replace(/[$,\s]/g, '');
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? null : num;
+    };
+
     const record = {
       organization_id: orgId,
       meeting_type: mainData.meeting_type || 'BOARD',
@@ -110,9 +123,9 @@ export function useMinutes() {
       previous_meeting_dates: mainData.previous_meeting_dates || null,
       minutes_approval_motion: mainData.minutes_approval_motion || null,
       minutes_no_motion: mainData.minutes_no_motion ?? false,
-      total_donations_ytd: mainData.total_donations_ytd || null,
-      donations_since_last_meeting: mainData.donations_since_last_meeting || null,
-      current_account_balance: mainData.current_account_balance || null,
+      total_donations_ytd: parseMoney(mainData.total_donations_ytd),
+      donations_since_last_meeting: parseMoney(mainData.donations_since_last_meeting),
+      current_account_balance: parseMoney(mainData.current_account_balance),
       accounts: mainData.accounts || [],
       financial_report_motion: mainData.financial_report_motion || null,
       financial_no_motion: mainData.financial_no_motion ?? false,
@@ -162,18 +175,22 @@ export function useMinutes() {
     }
 
     // Sync attendance (delete all, re-insert)
-    await supabase.from('attendance').delete().eq('minutes_id', minutesId);
+    // BUG-033: Check errors on all child table operations
+    const { error: attDelErr } = await supabase.from('attendance').delete().eq('minutes_id', minutesId);
+    if (attDelErr) throw new Error(`Attendance sync failed: ${attDelErr.message}`);
     if (attendance.length > 0) {
       const attRows = attendance.map(a => ({
         minutes_id: minutesId,
         member_id: a.member_id,
         status: a.status,
       }));
-      await supabase.from('attendance').insert(attRows);
+      const { error: attInsErr } = await supabase.from('attendance').insert(attRows);
+      if (attInsErr) throw new Error(`Attendance save failed: ${attInsErr.message}`);
     }
 
     // Sync business items
-    await supabase.from('business_items').delete().eq('minutes_id', minutesId);
+    const { error: bizDelErr } = await supabase.from('business_items').delete().eq('minutes_id', minutesId);
+    if (bizDelErr) throw new Error(`Business items sync failed: ${bizDelErr.message}`);
     if (businessItems.length > 0) {
       const bizRows = businessItems.map((b, i) => ({
         minutes_id: minutesId,
@@ -184,11 +201,13 @@ export function useMinutes() {
         no_motion: b.no_motion ?? true,
         sort_order: i + 1,
       }));
-      await supabase.from('business_items').insert(bizRows);
+      const { error: bizInsErr } = await supabase.from('business_items').insert(bizRows);
+      if (bizInsErr) throw new Error(`Business items save failed: ${bizInsErr.message}`);
     }
 
     // Sync action items
-    await supabase.from('action_items').delete().eq('minutes_id', minutesId);
+    const { error: actDelErr } = await supabase.from('action_items').delete().eq('minutes_id', minutesId);
+    if (actDelErr) throw new Error(`Action items sync failed: ${actDelErr.message}`);
     if (actionItems.length > 0) {
       const actRows = actionItems.map(a => ({
         minutes_id: minutesId,
@@ -198,23 +217,27 @@ export function useMinutes() {
         due_date: a.due_date || null,
         status: a.status || 'pending',
       }));
-      await supabase.from('action_items').insert(actRows);
+      const { error: actInsErr } = await supabase.from('action_items').insert(actRows);
+      if (actInsErr) throw new Error(`Action items save failed: ${actInsErr.message}`);
     }
 
     // Sync financial items
-    await supabase.from('financial_items').delete().eq('minutes_id', minutesId);
+    const { error: finDelErr } = await supabase.from('financial_items').delete().eq('minutes_id', minutesId);
+    if (finDelErr) throw new Error(`Financial items sync failed: ${finDelErr.message}`);
     if (financialItems.length > 0) {
       const finRows = financialItems.map(f => ({
         minutes_id: minutesId,
         item_type: f.item_type,
         description: f.description,
-        amount: f.amount || 0,
+        amount: parseFloat(String(f.amount).replace(/[$,\s]/g, '')) || 0,
       }));
-      await supabase.from('financial_items').insert(finRows);
+      const { error: finInsErr } = await supabase.from('financial_items').insert(finRows);
+      if (finInsErr) throw new Error(`Financial items save failed: ${finInsErr.message}`);
     }
 
     // Sync upcoming events
-    await supabase.from('minutes_upcoming_events').delete().eq('minutes_id', minutesId);
+    const { error: evtDelErr } = await supabase.from('minutes_upcoming_events').delete().eq('minutes_id', minutesId);
+    if (evtDelErr) throw new Error(`Upcoming events sync failed: ${evtDelErr.message}`);
     if (upcomingEvents.length > 0) {
       const evtRows = upcomingEvents.map(e => ({
         minutes_id: minutesId,
@@ -222,7 +245,8 @@ export function useMinutes() {
         date: e.date || null,
         location: e.location || null,
       }));
-      await supabase.from('minutes_upcoming_events').insert(evtRows);
+      const { error: evtInsErr } = await supabase.from('minutes_upcoming_events').insert(evtRows);
+      if (evtInsErr) throw new Error(`Upcoming events save failed: ${evtInsErr.message}`);
     }
 
     await fetchMinutesList();
