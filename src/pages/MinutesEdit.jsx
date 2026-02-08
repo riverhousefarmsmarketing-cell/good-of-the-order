@@ -780,6 +780,57 @@ const { toast } = useToast();
             </PreviewSection>
             )}
 
+            {/* BUG-047: Member Services Report */}
+            {!isSC && draft.member_services_report && (
+            <PreviewSection title="Member Services / Coordinator Report">
+              <div style={{ fontSize: 14 }}>{draft.member_services_report}</div>
+              <PreviewMotion motion={draft.member_services_motion} noMotion={draft.member_services_no_motion} />
+            </PreviewSection>
+            )}
+
+            {/* BUG-047: State Board Report */}
+            {!isSC && draft.state_board_report && (
+            <PreviewSection title="State Board / County Reports">
+              <div style={{ fontSize: 14 }}>{draft.state_board_report}</div>
+              <PreviewMotion motion={draft.state_board_motion} noMotion={draft.state_board_no_motion} />
+            </PreviewSection>
+            )}
+
+            {/* BUG-047: Committee Reports */}
+            {!isSC && (draft.membership_committee || draft.new_members || draft.pac_committee || draft.nomination_committee || draft.policy_committee) && (
+            <PreviewSection title="Committee Reports">
+              {(draft.membership_committee || draft.new_members) && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Membership Committee</div>
+                  {draft.membership_committee && <div style={{ fontSize: 14, marginLeft: 16 }}>{draft.membership_committee}</div>}
+                  {draft.new_members && <div style={{ fontSize: 14, marginLeft: 16 }}><strong>New Members:</strong> {draft.new_members}</div>}
+                  <PreviewMotion motion={draft.membership_motion} noMotion={draft.membership_no_motion} />
+                </div>
+              )}
+              {draft.pac_committee && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>PAC Committee</div>
+                  <div style={{ fontSize: 14, marginLeft: 16 }}>{draft.pac_committee}</div>
+                  <PreviewMotion motion={draft.pac_motion} noMotion={draft.pac_no_motion} />
+                </div>
+              )}
+              {draft.nomination_committee && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Nomination Committee</div>
+                  <div style={{ fontSize: 14, marginLeft: 16 }}>{draft.nomination_committee}</div>
+                  <PreviewMotion motion={draft.nomination_motion} noMotion={draft.nomination_no_motion} />
+                </div>
+              )}
+              {draft.policy_committee && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Policy Committee</div>
+                  <div style={{ fontSize: 14, marginLeft: 16 }}>{draft.policy_committee}</div>
+                  <PreviewMotion motion={draft.policy_motion} noMotion={draft.policy_no_motion} />
+                </div>
+              )}
+            </PreviewSection>
+            )}
+
             {draft.businessItems.filter(b => b.item_type === 'old').length > 0 && (
               <PreviewSection title="Old Business">
                 {draft.businessItems.filter(b => b.item_type === 'old').map((item, i) => (
