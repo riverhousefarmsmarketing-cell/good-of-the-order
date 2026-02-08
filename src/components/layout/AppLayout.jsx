@@ -161,12 +161,42 @@ export default function AppLayout({ children }) {
         {children}
       </main>
       <style>{`
+        /* BUG-501 FIX: Mobile responsive breakpoints */
         @media (max-width: 768px) {
           nav a[style] { padding: 8px 10px !important; font-size: 12px !important; white-space: nowrap; }
           main > div { padding-left: 12px !important; padding-right: 12px !important; }
+          /* Stack 2-column grids to single column */
+          [style*="gridTemplateColumns: '1fr 1fr'"],
+          [style*="grid-template-columns: 1fr 1fr"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 640px) {
+          /* Force all multi-column grids to single column on mobile */
+          .goto-grid-2, .goto-grid-3 { grid-template-columns: 1fr !important; }
+          /* Compact card padding */
+          main > div > div[style*="padding: 24px"],
+          main > div > div[style*="padding:24px"] { padding: 16px !important; }
+          /* Stack header bar buttons */
+          [style*="display: flex"][style*="justifyContent: 'space-between'"],
+          [style*="display: flex"][style*="justify-content: space-between"] {
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          /* Scrollable tabs */
+          [style*="borderBottom: '2px solid"],
+          [style*="border-bottom: 2px solid"] {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          /* Make member checkboxes single column */
+          [style*="gridTemplateColumns: '1fr 1fr'"] { grid-template-columns: 1fr !important; }
+          /* Ensure buttons don't overflow */
+          button { max-width: 100%; }
         }
         @media (max-width: 480px) {
           nav { height: 48px !important; }
+          nav > div:first-child > div:last-child { font-size: 11px !important; }
           /* BUG-022: Add scroll fade indicator for mobile nav overflow */
           nav::after {
             content: '';
@@ -178,6 +208,9 @@ export default function AppLayout({ children }) {
             pointer-events: none;
             background: linear-gradient(to right, transparent, var(--nav-bg, #1e293b));
           }
+          /* Reduce header text size */
+          h1 { font-size: 20px !important; }
+          h2 { font-size: 16px !important; }
         }
       `}</style>
     </div>

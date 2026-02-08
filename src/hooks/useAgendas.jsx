@@ -68,10 +68,15 @@ export function useAgendas() {
       agendaId = data.id;
     } else {
       // Optimistic locking: check updated_at
+      // BUG-403 FIX: Add 2s tolerance for client/server clock drift
       if (agendaData._loaded_at) {
         const { data: current } = await supabase.from('agendas').select('updated_at').eq('id', agendaId).maybeSingle();
-        if (current?.updated_at && new Date(current.updated_at) > new Date(agendaData._loaded_at)) {
-          throw new Error('This record was modified by another user. Please refresh and try again.');
+        if (current?.updated_at) {
+          const serverTime = new Date(current.updated_at).getTime();
+          const loadedTime = new Date(agendaData._loaded_at).getTime();
+          if (serverTime - loadedTime > 2000) {
+            throw new Error('This record was modified by another user. Please refresh and try again.');
+          }
         }
       }
       const { error } = await supabase.from('agendas').update(record).eq('id', agendaId);

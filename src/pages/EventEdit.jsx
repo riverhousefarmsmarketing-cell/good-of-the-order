@@ -153,7 +153,7 @@ export default function EventEditPage() {
             <input type="text" value={draft.name || ''} onChange={e => u('name', e.target.value)} placeholder="Enter event name" style={inp} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 14 }}>
+          <div className="goto-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Date *</label>
               <input type="date" value={draft.date || ''} onChange={e => u('date', e.target.value)} style={inp} />
@@ -168,7 +168,7 @@ export default function EventEditPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+          <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Purpose</label>
               <select value={draft.purpose || ''} onChange={e => u('purpose', e.target.value)} style={sel}>
@@ -220,7 +220,7 @@ export default function EventEditPage() {
                   <input type="text" inputMode="decimal" value={v.budget || ''} onChange={e => updateVendor(idx, { budget: e.target.value })} placeholder="Budget" style={{ ...inp, width: 100 }} />
                   <button onClick={() => removeVendor(idx)} style={{ padding: '7px 12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>×</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <div className="goto-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <input type="text" value={v.contact_name || ''} onChange={e => updateVendor(idx, { contact_name: e.target.value })} placeholder="Contact name" style={{ ...inp, fontSize: 13 }} />
                   <input type="text" value={v.contact_phone || ''} onChange={e => updateVendor(idx, { contact_phone: e.target.value })} placeholder="Phone" style={{ ...inp, fontSize: 13 }} />
                   <input type="email" value={v.contact_email || ''} onChange={e => updateVendor(idx, { contact_email: e.target.value })} placeholder="Email" style={{ ...inp, fontSize: 13 }} />

@@ -806,6 +806,7 @@ const { toast } = useToast();
         subject={`${MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes — ${fmtDate(draft.meeting_date)}`}
         htmlBody={generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, organization)}
         fromName={organization?.name || 'GoodOfTheOrder'}
+        members={members}
       />
     </div>
   );
@@ -821,6 +822,8 @@ function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES
   const np = '[Not provided]';
   const section = (title, content) => `<h3 style="color:#1e293b;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:20px 0 10px">${title}</h3>${content}`;
   const line = (label, value) => `<div style="font-size:14px;line-height:1.8"><strong>${label}:</strong> ${esc(value) || np}</div>`;
+  // BUG-802 FIX: Always escape fmtMember output before HTML insertion
+  const safeMember = (id) => esc(fmtMember(id));
 
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
   const logoAlign = org?.logo_position === 'left' ? 'left' : org?.logo_position === 'right' ? 'right' : 'center';
@@ -835,16 +838,16 @@ function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES
     line('Date', fmtDate(draft.meeting_date)) +
     line('Time', draft.meeting_time) +
     line('Location', draft.location) +
-    line(isSC ? 'Chair' : 'Facilitator', fmtMember(draft.facilitator_id)) +
-    line('Recorder', fmtMember(draft.recorder_id))
+    line(isSC ? 'Chair' : 'Facilitator', safeMember(draft.facilitator_id)) +
+    line('Recorder', safeMember(draft.recorder_id))
   );
 
   html += section('Call to Order', line('Called to Order', draft.time_called_to_order) +
     (!isSC ? line('Invocation', draft.invocation || 'Invocation was given.') + line('Pledge', draft.pledge_recited ? 'Pledge was recited.' : 'Not recited.') : '')
   );
 
-  const present = draft.attendance?.filter(a => a.status === 'present').map(a => fmtMember(a.member_id)).join(', ') || np;
-  const absent = draft.attendance?.filter(a => a.status === 'absent').map(a => fmtMember(a.member_id)).join(', ') || np;
+  const present = draft.attendance?.filter(a => a.status === 'present').map(a => safeMember(a.member_id)).join(', ') || np;
+  const absent = draft.attendance?.filter(a => a.status === 'absent').map(a => safeMember(a.member_id)).join(', ') || np;
   html += section('Attendance', line('Present', present) + line('Absent', absent) + line('Guests', draft.guests) +
     line('Quorum', QUORUM_OPTIONS.find(q => q.value === draft.quorum)?.label)
   );
@@ -911,7 +914,7 @@ function Field({ label, children, style = {} }) {
 }
 
 function Row({ children }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>{children}</div>;
+  return <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>{children}</div>;
 }
 
 function MotionBlock({ label, motion, onChange, noMotion, onNoMotionChange }) {

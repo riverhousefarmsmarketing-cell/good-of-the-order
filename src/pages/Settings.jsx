@@ -340,7 +340,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
           </Card>
           <Card title="Colors">
             <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Used in navigation, buttons, and PDF exports.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               {[{ f: 'primary_color', l: 'Primary Color', h: 'Navigation bar, headers' },
                 { f: 'accent_color', l: 'Accent Color', h: 'Buttons, highlights' }].map(c => (
                 <div key={c.f}>

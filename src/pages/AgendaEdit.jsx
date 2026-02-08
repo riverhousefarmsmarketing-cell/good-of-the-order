@@ -112,11 +112,11 @@ const isNew = !id;
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 0 40px' }}>
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: 24, marginBottom: 16 }}>
           <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1e293b', margin: '0 0 16px' }}>Meeting Details</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Meeting Type</label><select value={draft.meeting_type} onChange={e => u('meeting_type', e.target.value)} disabled={draft.status !== 'draft'} style={inp}>{MEETING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Meeting Date *</label><input type="date" value={draft.meeting_date || ''} onChange={e => u('meeting_date', e.target.value)} style={inp} /></div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Time</label><input type="text" value={draft.meeting_time || ''} onChange={e => u('meeting_time', e.target.value)} placeholder="e.g., 7:00 PM" style={inp} /></div>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Location</label><input type="text" value={draft.location || ''} onChange={e => u('location', e.target.value)} placeholder="Meeting location" style={inp} /></div>
           </div>

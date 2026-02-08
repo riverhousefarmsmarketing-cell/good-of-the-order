@@ -1,5 +1,18 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
+// BUG-505 FIX: Inject keyframes once globally instead of per-toast
+let toastStylesInjected = false;
+function ensureToastStyles() {
+  if (toastStylesInjected) return;
+  toastStylesInjected = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes toastSlideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toastSlideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+  `;
+  document.head.appendChild(style);
+}
+
 // ─── Context ─────────────────────────────────────────────────────────────────
 const ToastContext = createContext();
 
@@ -13,6 +26,9 @@ export function useToast() {
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const counterRef = useRef(0);
+
+  // BUG-505: Inject keyframe styles once
+  useEffect(() => { ensureToastStyles(); }, []);
 
   const addToast = useCallback((message, type = 'info', duration = 4000) => {
     const id = ++counterRef.current;
@@ -171,17 +187,6 @@ function ToastItem({ toast, onDismiss }) {
           <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
-
-      <style>{`
-        @keyframes toastSlideIn {
-          from { opacity: 0; transform: translateX(100%); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes toastSlideOut {
-          from { opacity: 1; transform: translateX(0); }
-          to { opacity: 0; transform: translateX(100%); }
-        }
-      `}</style>
     </div>
   );
 }

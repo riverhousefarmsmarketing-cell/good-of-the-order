@@ -18,10 +18,13 @@ import { useMembers } from '../../hooks/useMembers.jsx';
  *   subject: string (default subject line)
  *   htmlBody: string (email HTML content)
  *   fromName: string (org name)
+ *   members: array (optional — if provided, skips internal useMembers call)
  */
-export default function SendEmailModal({ open, onClose, documentType, documentId, subject: defaultSubject, htmlBody, fromName }) {
+export default function SendEmailModal({ open, onClose, documentType, documentId, subject: defaultSubject, htmlBody, fromName, members: membersProp }) {
   const { contacts, contactsLoading, sendEmail, fetchLogsForDocument } = useEmail();
-  const { members } = useMembers();
+  // BUG-704 FIX: Use passed members prop if available, otherwise fetch internally
+  const { members: membersInternal } = useMembers();
+  const members = membersProp || membersInternal;
   const [selectedEmails, setSelectedEmails] = useState(new Set());
   const [subject, setSubject] = useState(defaultSubject || '');
   const [sending, setSending] = useState(false);
