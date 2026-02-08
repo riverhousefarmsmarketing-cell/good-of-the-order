@@ -39,6 +39,7 @@ export default function MinutesEditPage() {
   const { members } = useMembers();
   const { organization } = useOrganization();
   const isEditor = profile?.role === 'admin' || profile?.role === 'editor';
+  const isLocked = draft?.status === 'approved'; // BUG-030: Lock all fields when finalized
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -190,7 +191,7 @@ const { toast } = useToast();
     </div>
   );
 
-  const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
+  const u = (field, value) => { if (isLocked) return; setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); }; // BUG-030: Block all updates when locked
 
   const handleSave = async (status) => {
     // BUG-021: Synchronous double-submit guard
@@ -226,6 +227,21 @@ const { toast } = useToast();
   const handleDelete = async () => {
     await deleteMinutes(draft.id);
     navigate('/minutes');
+  };
+
+  // BUG-031: Revert finalized minutes back to draft
+  const handleRevertToDraft = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const result = await saveMinutes({ ...draft, status: 'draft' });
+      setDraft(prev => ({ ...prev, status: 'draft', _loaded_at: result.updated_at }));
+      toast.success('Reverted to draft — you can now edit.');
+      setIsDirty(false);
+    } catch (err) {
+      toast.error(`Revert failed: ${err.message || 'Please try again.'}`);
+    } finally { setSaving(false); savingRef.current = false; }
   };
 
   // Attendance helpers
@@ -279,15 +295,18 @@ const { toast } = useToast();
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {isEditor ? (<>
-          {!isNew && <button onClick={() => setShowDeleteConfirm(true)} disabled={saving} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Delete</button>}
-          <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
-            {saving ? 'Saving...' : 'Save Draft'}
-          </button>
-          {draft.status !== 'approved' && (
+          {!isNew && !isLocked && <button onClick={() => setShowDeleteConfirm(true)} disabled={saving} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Delete</button>}
+          {!isLocked && (
+            <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+              {saving ? 'Saving...' : 'Save Draft'}
+            </button>
+          )}
+          {!isLocked && (
             <button onClick={handleFinalize} disabled={saving} style={{ padding: '8px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Finalize</button>
           )}
-          {draft.status === 'approved' && !isNew && (
+          {isLocked && !isNew && (
             <>
+              <button onClick={handleRevertToDraft} disabled={saving} style={{ padding: '8px 18px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>↩ Revert to Draft</button>
               <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
               <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>
             </>
@@ -301,6 +320,14 @@ const { toast } = useToast();
       {errors.length > 0 && (
         <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 13 }}>
           Missing required fields: {errors.join(', ')}
+        </div>
+      )}
+
+      {/* BUG-030: Locked banner when finalized */}
+      {isLocked && (
+        <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '10px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#166534', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🔒</span>
+          <span>These minutes are <strong>finalized</strong>. To make changes, click <strong>Revert to Draft</strong>.</span>
         </div>
       )}
 
