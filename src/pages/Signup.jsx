@@ -47,8 +47,8 @@ export default function SignupPage() {
       setError('All fields are required.');
       return;
     }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     setStep(2);
@@ -88,6 +88,23 @@ export default function SignupPage() {
     if (slugAvailable === false) {
       setError('That short name is already taken. Please choose another.');
       return;
+    }
+
+    // BUG-203: Verify slug if check hasn't run yet (user never blurred)
+    if (slugAvailable === null) {
+      await checkSlugAvailability(form.organizationSlug);
+      // Re-check after async call — if taken, abort
+      // Note: We need to re-read from the check function directly
+      const { data: existing } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('slug', form.organizationSlug)
+        .maybeSingle();
+      if (existing) {
+        setSlugAvailable(false);
+        setError('That short name is already taken. Please choose another.');
+        return;
+      }
     }
 
     setSubmitting(true);

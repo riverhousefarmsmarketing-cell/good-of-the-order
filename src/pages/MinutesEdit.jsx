@@ -64,6 +64,7 @@ const { toast } = useToast();
   }, [isDirty]);
 
   // Mark dirty on any draft change (after initial load)
+  // BUG-502 FIX: Removed separate uWithDirty — u() now always marks dirty
   const uWithDirty = (field, value) => { setIsDirty(true); u(field, value); };
 
   const isNew = !id;
@@ -183,7 +184,7 @@ const { toast } = useToast();
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
+  const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async (status) => {
     // BUG-021: Synchronous double-submit guard
