@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
 import { Navigate, Link } from 'react-router-dom';
 
@@ -9,6 +9,10 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // BUG-202 FIX: Client-side rate limiting
+  const failCountRef = useRef(0);
+  const lockoutUntilRef = useRef(null);
+
   if (!loading && user) {
     return <Navigate to="/" replace />;
   }
@@ -16,11 +20,31 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    // Rate limit check
+    if (lockoutUntilRef.current && Date.now() < lockoutUntilRef.current) {
+      const secsLeft = Math.ceil((lockoutUntilRef.current - Date.now()) / 1000);
+      setError(`Too many attempts. Please wait ${secsLeft} seconds.`);
+      return;
+    }
+
     setSubmitting(true);
 
     const { error: signInError } = await signIn({ email, password });
     if (signInError) {
-      setError(signInError.message);
+      failCountRef.current += 1;
+      // Lock out after 5 failed attempts: 30s first time, doubles each time
+      if (failCountRef.current >= 5) {
+        const lockoutMs = Math.min(30000 * Math.pow(2, failCountRef.current - 5), 300000); // max 5 min
+        lockoutUntilRef.current = Date.now() + lockoutMs;
+        setError(`Too many failed attempts. Please wait ${Math.ceil(lockoutMs / 1000)} seconds before trying again.`);
+      } else {
+        setError(signInError.message);
+      }
+    } else {
+      // Reset on success
+      failCountRef.current = 0;
+      lockoutUntilRef.current = null;
     }
     setSubmitting(false);
   };

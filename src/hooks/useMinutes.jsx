@@ -6,6 +6,37 @@ import { supabase } from '../lib/supabase';
  * Handles the main minutes record plus child tables:
  * attendance, business_items, action_items, financial_items, minutes_upcoming_events
  */
+
+// BUG-702: Cache role check to avoid extra DB call on every save
+let _cachedRole = null;
+let _cachedRoleUserId = null;
+
+async function checkWritePermission() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Return cached role if same user
+  if (_cachedRoleUserId === user.id && _cachedRole) {
+    if (!['admin', 'editor'].includes(_cachedRole)) {
+      throw new Error('Insufficient permissions: editor or admin role required');
+    }
+    return;
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  _cachedRole = profile?.role;
+  _cachedRoleUserId = user.id;
+
+  if (!profile || !['admin', 'editor'].includes(profile.role)) {
+    throw new Error('Insufficient permissions: editor or admin role required');
+  }
+}
+
 export function useMinutes() {
   const [minutesList, setMinutesList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,8 +98,13 @@ export function useMinutes() {
     };
   }, []);
 
-  // Save minutes (create or update) + all child tables
+  // Save minutes (create or update) via atomic server-side transaction (RPC)
+  // BUG-401 FIX: All child table sync now happens inside a single DB transaction
+  // BUG-301 FIX: Client-side role check before attempting write
   const saveMinutes = useCallback(async (minutesData) => {
+    // Client-side permission guard (cached after first check)
+    await checkWritePermission();
+
     const {
       attendance = [],
       businessItems = [],
@@ -78,30 +114,10 @@ export function useMinutes() {
       ...mainData
     } = minutesData;
 
-    // Get org id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', (await supabase.auth.getUser()).data.user.id)
-      .maybeSingle();
-
-    const orgId = profile?.organization_id;
-    if (!orgId) throw new Error('No organization found');
-
-    let minutesId = mainData.id;
-    const isNew = !minutesId || !(await supabase.from('minutes').select('id').eq('id', minutesId).maybeSingle()).data;
-
-    // Clean the main record
-    // BUG-017/027: Parse money fields to proper numbers for DECIMAL columns
-    const parseMoney = (val) => {
-      if (val === null || val === undefined || val === '') return null;
-      const cleaned = String(val).replace(/[$,\s]/g, '');
-      const num = parseFloat(cleaned);
-      return isNaN(num) ? null : num;
-    };
-
-    const record = {
-      organization_id: orgId,
+    // Build the payload for the atomic RPC
+    const p_minutes = {
+      id: mainData.id || null,
+      _loaded_at: minutesData._loaded_at || null,
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       agenda_id: mainData.agenda_id || null,
@@ -123,9 +139,9 @@ export function useMinutes() {
       previous_meeting_dates: mainData.previous_meeting_dates || null,
       minutes_approval_motion: mainData.minutes_approval_motion || null,
       minutes_no_motion: mainData.minutes_no_motion ?? false,
-      total_donations_ytd: parseMoney(mainData.total_donations_ytd),
-      donations_since_last_meeting: parseMoney(mainData.donations_since_last_meeting),
-      current_account_balance: parseMoney(mainData.current_account_balance),
+      total_donations_ytd: mainData.total_donations_ytd ?? null,
+      donations_since_last_meeting: mainData.donations_since_last_meeting ?? null,
+      current_account_balance: mainData.current_account_balance ?? null,
       accounts: mainData.accounts || [],
       financial_report_motion: mainData.financial_report_motion || null,
       financial_no_motion: mainData.financial_no_motion ?? false,
@@ -157,107 +173,74 @@ export function useMinutes() {
       adjournment_no_motion: mainData.adjournment_no_motion ?? true,
     };
 
-    if (isNew) {
-      record.created_by = (await supabase.auth.getUser()).data.user.id;
-      const { data, error } = await supabase.from('minutes').insert(record).select().single();
-      if (error) throw error;
-      minutesId = data.id;
-    } else {
-      // Optimistic locking: if caller passed _loaded_at, verify no one else saved since
-      if (minutesData._loaded_at) {
-        const { data: current } = await supabase.from('minutes').select('updated_at').eq('id', minutesId).maybeSingle();
-        if (current?.updated_at && new Date(current.updated_at) > new Date(minutesData._loaded_at)) {
-          throw new Error('This record was modified by another user. Please refresh and try again.');
-        }
-      }
-      const { error } = await supabase.from('minutes').update(record).eq('id', minutesId);
-      if (error) throw error;
+    const p_attendance = attendance.map(a => ({
+      member_id: a.member_id,
+      status: a.status,
+    }));
+
+    const p_business_items = businessItems.map(b => ({
+      item_type: b.item_type,
+      title: b.title,
+      discussion: b.discussion || null,
+      motion: b.motion || null,
+      no_motion: b.no_motion ?? true,
+    }));
+
+    const p_action_items = actionItems.map(a => ({
+      task: a.task,
+      assignee_name: a.assignee_name || null,
+      assignee_id: a.assignee_id || null,
+      due_date: a.due_date || null,
+      status: a.status || 'pending',
+    }));
+
+    const p_financial_items = financialItems.map(f => ({
+      item_type: f.item_type,
+      description: f.description,
+      amount: String(f.amount || '0'),
+    }));
+
+    const p_upcoming_events = upcomingEvents.map(e => ({
+      name: e.name,
+      date: e.date || null,
+      location: e.location || null,
+    }));
+
+    const { data: minutesId, error } = await supabase.rpc('save_minutes_atomic', {
+      p_minutes,
+      p_attendance,
+      p_business_items,
+      p_action_items,
+      p_financial_items,
+      p_upcoming_events,
+    });
+
+    if (error) throw error;
+
+    // BUG-702 FIX: Fetch only the saved record and merge into list (not full re-fetch)
+    const { data: updated } = await supabase
+      .from('minutes')
+      .select('id, meeting_type, subcommittee_id, meeting_date, status, facilitator_id, recorder_id, quorum, created_at, subcommittee:subcommittees(name)')
+      .eq('id', minutesId)
+      .single();
+
+    if (updated) {
+      setMinutesList(prev => {
+        const exists = prev.some(m => m.id === minutesId);
+        if (exists) return prev.map(m => m.id === minutesId ? updated : m);
+        return [updated, ...prev];
+      });
     }
 
-    // Sync attendance (delete all, re-insert)
-    // BUG-033: Check errors on all child table operations
-    const { error: attDelErr } = await supabase.from('attendance').delete().eq('minutes_id', minutesId);
-    if (attDelErr) throw new Error(`Attendance sync failed: ${attDelErr.message}`);
-    if (attendance.length > 0) {
-      const attRows = attendance.map(a => ({
-        minutes_id: minutesId,
-        member_id: a.member_id,
-        status: a.status,
-      }));
-      const { error: attInsErr } = await supabase.from('attendance').insert(attRows);
-      if (attInsErr) throw new Error(`Attendance save failed: ${attInsErr.message}`);
-    }
-
-    // Sync business items
-    const { error: bizDelErr } = await supabase.from('business_items').delete().eq('minutes_id', minutesId);
-    if (bizDelErr) throw new Error(`Business items sync failed: ${bizDelErr.message}`);
-    if (businessItems.length > 0) {
-      const bizRows = businessItems.map((b, i) => ({
-        minutes_id: minutesId,
-        item_type: b.item_type,
-        title: b.title,
-        discussion: b.discussion || null,
-        motion: b.motion || null,
-        no_motion: b.no_motion ?? true,
-        sort_order: i + 1,
-      }));
-      const { error: bizInsErr } = await supabase.from('business_items').insert(bizRows);
-      if (bizInsErr) throw new Error(`Business items save failed: ${bizInsErr.message}`);
-    }
-
-    // Sync action items
-    const { error: actDelErr } = await supabase.from('action_items').delete().eq('minutes_id', minutesId);
-    if (actDelErr) throw new Error(`Action items sync failed: ${actDelErr.message}`);
-    if (actionItems.length > 0) {
-      const actRows = actionItems.map(a => ({
-        minutes_id: minutesId,
-        task: a.task,
-        assignee_name: a.assignee_name || null,
-        assignee_id: a.assignee_id || null,
-        due_date: a.due_date || null,
-        status: a.status || 'pending',
-      }));
-      const { error: actInsErr } = await supabase.from('action_items').insert(actRows);
-      if (actInsErr) throw new Error(`Action items save failed: ${actInsErr.message}`);
-    }
-
-    // Sync financial items
-    const { error: finDelErr } = await supabase.from('financial_items').delete().eq('minutes_id', minutesId);
-    if (finDelErr) throw new Error(`Financial items sync failed: ${finDelErr.message}`);
-    if (financialItems.length > 0) {
-      const finRows = financialItems.map(f => ({
-        minutes_id: minutesId,
-        item_type: f.item_type,
-        description: f.description,
-        amount: parseFloat(String(f.amount).replace(/[$,\s]/g, '')) || 0,
-      }));
-      const { error: finInsErr } = await supabase.from('financial_items').insert(finRows);
-      if (finInsErr) throw new Error(`Financial items save failed: ${finInsErr.message}`);
-    }
-
-    // Sync upcoming events
-    const { error: evtDelErr } = await supabase.from('minutes_upcoming_events').delete().eq('minutes_id', minutesId);
-    if (evtDelErr) throw new Error(`Upcoming events sync failed: ${evtDelErr.message}`);
-    if (upcomingEvents.length > 0) {
-      const evtRows = upcomingEvents.map(e => ({
-        minutes_id: minutesId,
-        name: e.name,
-        date: e.date || null,
-        location: e.location || null,
-      }));
-      const { error: evtInsErr } = await supabase.from('minutes_upcoming_events').insert(evtRows);
-      if (evtInsErr) throw new Error(`Upcoming events save failed: ${evtInsErr.message}`);
-    }
-
-    await fetchMinutesList();
     return minutesId;
-  }, [fetchMinutesList]);
+  }, []);
 
   const deleteMinutes = useCallback(async (id) => {
     const { error } = await supabase.from('minutes').delete().eq('id', id);
     if (error) throw error;
-    await fetchMinutesList();
-  }, [fetchMinutesList]);
+    // BUG-702: Optimistic remove from local list
+    setMinutesList(prev => prev.filter(m => m.id !== id));
+  }, []);
 
   return {
     minutesList,

@@ -48,8 +48,11 @@ function loadImageAsBase64(url) {
 
 // ─── Main export ─────────────────────────────────────────────────────
 export async function downloadMinutesPDF(draft, members, organization, distributionLogs = []) {
-  // Load logo before generating PDF
-  const logo = await loadImageAsBase64(organization?.logo_url);
+  // BUG-409 FIX: Graceful fallback if jsPDF fails
+  let doc;
+  try {
+    // Load logo before generating PDF
+    const logo = await loadImageAsBase64(organization?.logo_url);
 
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth();   // 612
@@ -467,4 +470,14 @@ export async function downloadMinutesPDF(draft, members, organization, distribut
   const dateStr = draft.meeting_date || 'undated';
   const typeStr = (draft.meeting_type || 'board').toLowerCase();
   doc.save(`minutes-${typeStr}-${dateStr}.pdf`);
+
+  } catch (err) {
+    console.error('PDF generation failed:', err);
+    // BUG-409: User-friendly fallback instead of silent failure
+    alert(
+      'PDF generation failed. This may be caused by a missing library or an issue with the document data.\n\n' +
+      'Error: ' + (err.message || 'Unknown error') + '\n\n' +
+      'Tip: You can use the email distribution feature to share minutes instead.'
+    );
+  }
 }

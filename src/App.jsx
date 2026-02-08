@@ -3,21 +3,26 @@ import { useAuth } from './hooks/useAuth.js';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './components/ui/Toast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
-import LandingPage from './pages/LandingPage';
+import React, { Suspense } from 'react';
+
+// BUG-506 FIX: Lazy-load heavy pages — only fetched when user navigates to them
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const MinutesEditPage = React.lazy(() => import('./pages/MinutesEdit'));
+const AgendaEditPage = React.lazy(() => import('./pages/AgendaEdit'));
+const EventEditPage = React.lazy(() => import('./pages/EventEdit'));
+const SettingsPage = React.lazy(() => import('./pages/Settings'));
+const DistributionListPage = React.lazy(() => import('./pages/DistributionList'));
+const EmailHistoryPage = React.lazy(() => import('./pages/EmailHistory'));
+
+// Eagerly load lightweight/critical-path pages
 import LoginPage from './pages/Login';
 import SignupPage from './pages/Signup';
 import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordReset';
 import DashboardPage from './pages/Dashboard';
 import MembersPage from './pages/Members';
-import SettingsPage from './pages/Settings';
 import MinutesArchivePage from './pages/MinutesArchive';
-import MinutesEditPage from './pages/MinutesEdit';
 import AgendasListPage from './pages/AgendasList';
-import AgendaEditPage from './pages/AgendaEdit';
 import EventsListPage from './pages/EventsList';
-import EventEditPage from './pages/EventEdit';
-import DistributionListPage from './pages/DistributionList';
-import EmailHistoryPage from './pages/EmailHistory';
 import AppLayout from './components/layout/AppLayout';
 
 /**
@@ -29,7 +34,7 @@ function LandingOrDashboard() {
   if (loading) return <LoadingScreen slow={loadingSlow} />;
 
   // Not logged in → show marketing landing page
-  if (!user) return <LandingPage />;
+  if (!user) return <Suspense fallback={<LoadingScreen />}><LandingPage /></Suspense>;
 
   // Logged in → show dashboard inside app layout
   return (
@@ -78,7 +83,9 @@ function ProtectedLayout() {
   return (
     <OrganizationProvider organization={organization}>
       <AppLayout>
-        <Outlet />
+        <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}>
+          <Outlet />
+        </Suspense>
       </AppLayout>
     </OrganizationProvider>
   );
