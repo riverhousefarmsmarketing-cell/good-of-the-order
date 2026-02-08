@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { clearRoleCache } from './useMinutes.jsx';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -105,6 +106,7 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     fetchingRef.current = false;
+    clearRoleCache(); // BUG-803 FIX: Reset module-level role cache on logout
     const { error } = await supabase.auth.signOut();
     if (!error) { setUser(null); setProfile(null); }
     return { error };

@@ -8,12 +8,23 @@ import { supabase } from '../lib/supabase';
  */
 
 // BUG-702: Cache role check to avoid extra DB call on every save
+// BUG-803 FIX: Export clearRoleCache so signOut can reset it
 let _cachedRole = null;
 let _cachedRoleUserId = null;
+
+export function clearRoleCache() {
+  _cachedRole = null;
+  _cachedRoleUserId = null;
+}
 
 async function checkWritePermission() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+
+  // BUG-803 FIX: Always invalidate if user changed
+  if (_cachedRoleUserId && _cachedRoleUserId !== user.id) {
+    clearRoleCache();
+  }
 
   // Return cached role if same user
   if (_cachedRoleUserId === user.id && _cachedRole) {
@@ -114,6 +125,9 @@ export function useMinutes() {
       ...mainData
     } = minutesData;
 
+    // BUG-813 FIX: Strip currency formatting before sending to DB
+    const stripMoney = (v) => v == null ? null : String(v).replace(/[$,\s]/g, '') || null;
+
     // Build the payload for the atomic RPC
     const p_minutes = {
       id: mainData.id || null,
@@ -139,9 +153,9 @@ export function useMinutes() {
       previous_meeting_dates: mainData.previous_meeting_dates || null,
       minutes_approval_motion: mainData.minutes_approval_motion || null,
       minutes_no_motion: mainData.minutes_no_motion ?? false,
-      total_donations_ytd: mainData.total_donations_ytd ?? null,
-      donations_since_last_meeting: mainData.donations_since_last_meeting ?? null,
-      current_account_balance: mainData.current_account_balance ?? null,
+      total_donations_ytd: stripMoney(mainData.total_donations_ytd),
+      donations_since_last_meeting: stripMoney(mainData.donations_since_last_meeting),
+      current_account_balance: stripMoney(mainData.current_account_balance),
       accounts: mainData.accounts || [],
       financial_report_motion: mainData.financial_report_motion || null,
       financial_no_motion: mainData.financial_no_motion ?? false,
@@ -206,7 +220,8 @@ export function useMinutes() {
       location: e.location || null,
     }));
 
-    const { data: minutesId, error } = await supabase.rpc('save_minutes_atomic', {
+    // BUG-819 FIX: RPC now returns jsonb {id, updated_at} instead of bare uuid
+    const { data: rpcResult, error } = await supabase.rpc('save_minutes_atomic', {
       p_minutes,
       p_attendance,
       p_business_items,
@@ -216,6 +231,8 @@ export function useMinutes() {
     });
 
     if (error) throw error;
+    const minutesId = rpcResult.id;
+    const serverUpdatedAt = rpcResult.updated_at;
 
     // BUG-702 FIX: Fetch only the saved record and merge into list (not full re-fetch)
     const { data: updated } = await supabase
@@ -232,7 +249,8 @@ export function useMinutes() {
       });
     }
 
-    return minutesId;
+    // BUG-819 FIX: Return updated_at so caller can set _loaded_at for optimistic locking
+    return { id: minutesId, updated_at: serverUpdatedAt };
   }, []);
 
   const deleteMinutes = useCallback(async (id) => {

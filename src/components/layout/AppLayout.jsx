@@ -18,7 +18,9 @@ export default function AppLayout({ children }) {
   const { branding } = useOrganization();
   const location = useLocation();
 
-  const navBg = branding?.primaryColor || '#1e293b';
+  // BUG-814 FIX: Sanitize color — only allow valid hex colors to prevent CSS injection
+  const rawColor = branding?.primaryColor || '#1e293b';
+  const navBg = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#1e293b';
 
   return (
     <div style={{
@@ -162,35 +164,23 @@ export default function AppLayout({ children }) {
       </main>
       <style>{`
         /* BUG-501 FIX: Mobile responsive breakpoints */
+        /* BUG-821 FIX: Use class selectors instead of fragile style attribute matching */
         @media (max-width: 768px) {
           nav a[style] { padding: 8px 10px !important; font-size: 12px !important; white-space: nowrap; }
           main > div { padding-left: 12px !important; padding-right: 12px !important; }
           /* Stack 2-column grids to single column */
-          [style*="gridTemplateColumns: '1fr 1fr'"],
-          [style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
-          }
+          .goto-grid-2 { grid-template-columns: 1fr !important; }
+          .goto-grid-3 { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 640px) {
           /* Force all multi-column grids to single column on mobile */
           .goto-grid-2, .goto-grid-3 { grid-template-columns: 1fr !important; }
           /* Compact card padding */
-          main > div > div[style*="padding: 24px"],
-          main > div > div[style*="padding:24px"] { padding: 16px !important; }
+          .goto-card { padding: 16px !important; }
           /* Stack header bar buttons */
-          [style*="display: flex"][style*="justifyContent: 'space-between'"],
-          [style*="display: flex"][style*="justify-content: space-between"] {
-            flex-wrap: wrap;
-            gap: 8px;
-          }
+          .goto-header-bar { flex-wrap: wrap; gap: 8px; }
           /* Scrollable tabs */
-          [style*="borderBottom: '2px solid"],
-          [style*="border-bottom: 2px solid"] {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-          /* Make member checkboxes single column */
-          [style*="gridTemplateColumns: '1fr 1fr'"] { grid-template-columns: 1fr !important; }
+          .goto-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
           /* Ensure buttons don't overflow */
           button { max-width: 100%; }
         }

@@ -36,22 +36,12 @@ export function useAgendas() {
   }, []);
 
   const saveAgenda = useCallback(async (agendaData) => {
-    const { items = [], ...mainData } = agendaData;
+    const { items = [], _loaded_at, ...mainData } = agendaData;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', (await supabase.auth.getUser()).data.user.id)
-      .maybeSingle();
-
-    const orgId = profile?.organization_id;
-    if (!orgId) throw new Error('No organization found');
-
-    let agendaId = mainData.id;
-    const isNew = !agendaId || !(await supabase.from('agendas').select('id').eq('id', agendaId).maybeSingle()).data;
-
-    const record = {
-      organization_id: orgId,
+    // BUG-804 FIX: Use atomic server-side RPC instead of separate delete+insert
+    const p_agenda = {
+      id: mainData.id || null,
+      _loaded_at: _loaded_at || null,
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       meeting_date: mainData.meeting_date || null,
@@ -61,45 +51,23 @@ export function useAgendas() {
       source_minutes_id: mainData.source_minutes_id || null,
     };
 
-    if (isNew) {
-      record.created_by = (await supabase.auth.getUser()).data.user.id;
-      const { data, error } = await supabase.from('agendas').insert(record).select().single();
-      if (error) throw error;
-      agendaId = data.id;
-    } else {
-      // Optimistic locking: check updated_at
-      // BUG-403 FIX: Add 2s tolerance for client/server clock drift
-      if (agendaData._loaded_at) {
-        const { data: current } = await supabase.from('agendas').select('updated_at').eq('id', agendaId).maybeSingle();
-        if (current?.updated_at) {
-          const serverTime = new Date(current.updated_at).getTime();
-          const loadedTime = new Date(agendaData._loaded_at).getTime();
-          if (serverTime - loadedTime > 2000) {
-            throw new Error('This record was modified by another user. Please refresh and try again.');
-          }
-        }
-      }
-      const { error } = await supabase.from('agendas').update(record).eq('id', agendaId);
-      if (error) throw error;
-    }
+    const p_items = items.map(item => ({
+      title: item.title,
+      description: item.description || null,
+      is_standard: item.is_standard ?? false,
+      is_inherited: item.is_inherited ?? false,
+      source_minutes_id: item.source_minutes_id || null,
+    }));
 
-    // Sync items
-    await supabase.from('agenda_items').delete().eq('agenda_id', agendaId);
-    if (items.length > 0) {
-      const itemRows = items.map((item, i) => ({
-        agenda_id: agendaId,
-        title: item.title,
-        description: item.description || null,
-        is_standard: item.is_standard ?? false,
-        is_inherited: item.is_inherited ?? false,
-        source_minutes_id: item.source_minutes_id || null,
-        sort_order: i + 1,
-      }));
-      await supabase.from('agenda_items').insert(itemRows);
-    }
+    const { data: result, error } = await supabase.rpc('save_agenda_atomic', {
+      p_agenda,
+      p_items,
+    });
+
+    if (error) throw error;
 
     await fetchAgendasList();
-    return agendaId;
+    return result.id;
   }, [fetchAgendasList]);
 
   const deleteAgenda = useCallback(async (id) => {

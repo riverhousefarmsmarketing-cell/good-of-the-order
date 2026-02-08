@@ -33,12 +33,13 @@ export function useEvents() {
   const saveEvent = useCallback(async (eventData) => {
     const { event_vendors: vendors, subcommittees: _sc, _isNew: _flag, ...eventFields } = eventData;
 
-    // Get org id
-    const { data: { session } } = await supabase.auth.getSession();
+    // Get org id (BUG-805 FIX: use getUser() for server-verified JWT, not getSession())
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
     const { data: profile } = await supabase
       .from('profiles')
       .select('organization_id')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     const orgId = profile.organization_id;

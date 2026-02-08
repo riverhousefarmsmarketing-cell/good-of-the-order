@@ -66,6 +66,27 @@ serve(async (req) => {
     if (!subject) throw new Error('No subject')
     if (!html) throw new Error('No email body')
 
+    // ── BUG-812 FIX: Server-side rate limiting ──────────────────────────
+    if (organization_id) {
+      const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!)
+      const { data: allowed, error: rlErr } = await supabaseAdmin.rpc('check_email_rate_limit', {
+        p_org_id: organization_id,
+      })
+      if (rlErr) console.error('Rate limit check error:', rlErr)
+      if (allowed === false) {
+        return new Response(
+          JSON.stringify({ error: 'Rate limit exceeded. Maximum 20 emails per hour per organization.' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+        )
+      }
+    }
+
+    // ── BUG-822 FIX: Sanitize HTML — strip script tags and event handlers ──
+    const sanitizedHtml = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/\son\w+\s*=\s*\S+/gi, '')
+
     // Send via Resend
     const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`
 
@@ -83,7 +104,7 @@ serve(async (req) => {
         to: [fromEmail.match(/<(.+)>/)?.[1] || 'notifications@goodoftheorder.app'],
         bcc: to,              // ALL recipients as BCC
         subject,
-        html,
+        html: sanitizedHtml,  // BUG-822: Use sanitized HTML
       }),
     })
 

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const ORG_TYPES = [
@@ -13,10 +13,33 @@ const ORG_TYPES = [
 ];
 
 export default function SignupPage() {
-  const { user, signUp, loading } = useAuth();
+  const { user, signUp, signUpWithInvite, loading } = useAuth();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // BUG-802 FIX: Detect and handle invitation tokens
+  const [inviteData, setInviteData] = useState(null); // {id, organization_id, email, role, board_position}
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const inviteToken = searchParams.get('invite');
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    setInviteLoading(true);
+    supabase.rpc('lookup_invitation', { invite_token: inviteToken })
+      .then(({ data, error: lookupErr }) => {
+        if (lookupErr || !data || data.length === 0) {
+          setError('This invitation link is invalid or has expired.');
+          setInviteData(null);
+        } else {
+          const inv = data[0];
+          setInviteData(inv);
+          setForm(prev => ({ ...prev, email: inv.email || '' }));
+        }
+        setInviteLoading(false);
+      });
+  }, [inviteToken]);
 
   const [form, setForm] = useState({
     fullName: '',
@@ -51,7 +74,29 @@ export default function SignupPage() {
       setError('Password must be at least 8 characters.');
       return;
     }
+    // BUG-802 FIX: If invite token, submit directly (skip org creation step)
+    if (inviteData) {
+      handleInviteSignup();
+      return;
+    }
     setStep(2);
+  };
+
+  // BUG-802 FIX: Handle invited user signup
+  const handleInviteSignup = async () => {
+    setSubmitting(true);
+    setError(null);
+    const { error: signUpError } = await signUpWithInvite({
+      email: form.email,
+      password: form.password,
+      fullName: form.fullName,
+      invitationToken: inviteToken,
+    });
+    if (signUpError) {
+      setError(signUpError.message);
+      setSubmitting(false);
+    }
+    // On success, auth state change will redirect
   };
 
   const [slugAvailable, setSlugAvailable] = useState(null);
@@ -118,7 +163,14 @@ export default function SignupPage() {
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      // BUG-806 FIX: Map raw Postgres duplicate key error to friendly message
+      const msg = signUpError.message || '';
+      if (msg.includes('duplicate key') || msg.includes('slug') || msg.includes('already exists')) {
+        setSlugAvailable(false);
+        setError('That short name is already taken. Please choose another.');
+      } else {
+        setError(msg);
+      }
       setSubmitting(false);
     }
     // On success, auth state change will redirect
@@ -165,18 +217,23 @@ export default function SignupPage() {
             <span style={{ color: 'white', fontWeight: 700, fontSize: 18 }}>GO</span>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: '0 0 4px' }}>
-            Create Your GoodOfTheOrder Portal
+            {inviteData ? 'Join Your Organization' : 'Create Your GoodOfTheOrder Portal'}
           </h1>
           <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
-            Step {step} of 2 - {step === 1 ? 'Your Account' : 'Organization Setup'}
+            {inviteData
+              ? `You've been invited to join as ${inviteData.role || 'a member'}`
+              : `Step ${step} of 2 - ${step === 1 ? 'Your Account' : 'Organization Setup'}`
+            }
           </p>
         </div>
 
         {/* Progress bar */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-          <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#1e293b' }} />
-          <div style={{ flex: 1, height: 4, borderRadius: 2, background: step >= 2 ? '#1e293b' : '#e2e8f0' }} />
-        </div>
+        {!inviteData && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#1e293b' }} />
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: step >= 2 ? '#1e293b' : '#e2e8f0' }} />
+          </div>
+        )}
 
         <div style={{
           background: 'white',
@@ -219,8 +276,12 @@ export default function SignupPage() {
                   value={form.email}
                   onChange={(e) => updateForm('email', e.target.value)}
                   required
+                  readOnly={!!inviteData?.email}
                   placeholder="jane@organization.com"
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    ...(inviteData?.email ? { background: '#f1f5f9', color: '#64748b' } : {}),
+                  }}
                 />
               </div>
               <div style={{ marginBottom: 24 }}>
@@ -230,11 +291,11 @@ export default function SignupPage() {
                   value={form.password}
                   onChange={(e) => updateForm('password', e.target.value)}
                   required
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   style={inputStyle}
                 />
               </div>
-              <button type="submit" style={{
+              <button type="submit" disabled={submitting || inviteLoading} style={{
                 width: '100%',
                 padding: '10px 16px',
                 background: '#1e293b',
@@ -243,9 +304,10 @@ export default function SignupPage() {
                 borderRadius: 6,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: submitting ? 'wait' : 'pointer',
+                opacity: submitting ? 0.7 : 1,
               }}>
-                Continue
+                {submitting ? 'Creating...' : inviteData ? 'Join Organization' : 'Continue'}
               </button>
             </form>
           )}

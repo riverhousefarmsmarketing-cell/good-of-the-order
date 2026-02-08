@@ -63,9 +63,7 @@ const { toast } = useToast();
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // Mark dirty on any draft change (after initial load)
-  // BUG-502 FIX: Removed separate uWithDirty — u() now always marks dirty
-  const uWithDirty = (field, value) => { setIsDirty(true); u(field, value); };
+  // BUG-502 FIX / BUG-815 FIX: Removed uWithDirty — u() always marks dirty (see line 187)
 
   const isNew = !id;
 
@@ -182,7 +180,15 @@ const { toast } = useToast();
       });
   }, [draft?.id, showSendModal]);
 
-  if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
+  if (!draft) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 64, color: '#64748b' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#1e40af', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+        <div>Loading minutes...</div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
@@ -193,7 +199,11 @@ const { toast } = useToast();
     setSaving(true);
     setErrors([]);
     try {
-      const newId = await saveMinutes({ ...draft, status: status || draft.status });
+      // BUG-819 FIX: saveMinutes now returns {id, updated_at}
+      const result = await saveMinutes({ ...draft, status: status || draft.status });
+      const newId = result.id;
+      // Update _loaded_at so subsequent saves use optimistic locking
+      setDraft(prev => ({ ...prev, id: newId, _loaded_at: result.updated_at }));
       setIsDirty(false); // BUG-023: Clear dirty flag on success
       if (isNew) navigate(`/minutes/${newId}`, { replace: true });
     } catch (err) {
