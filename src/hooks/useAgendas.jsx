@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { rpcFetch } from '../lib/rpcFetch';
 
 export function useAgendas({ autoFetch = true } = {}) {
   const [agendasList, setAgendasList] = useState([]);
@@ -7,7 +8,6 @@ export function useAgendas({ autoFetch = true } = {}) {
   const fetchingRef = useRef(false);
 
   const fetchAgendasList = useCallback(async () => {
-    // Prevent concurrent fetches
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     try {
@@ -67,14 +67,13 @@ export function useAgendas({ autoFetch = true } = {}) {
       source_minutes_id: item.source_minutes_id || null,
     }));
 
-    const { data: result, error } = await supabase.rpc('save_agenda_atomic', {
+    // Use raw fetch instead of supabase.rpc() to avoid client hanging bug
+    const { data: result, error } = await rpcFetch('save_agenda_atomic', {
       p_agenda,
       p_items,
     });
 
-    if (error) throw error;
-    // Don't await list refresh here — let the caller handle it
-    // This prevents re-render loops when called from AgendaEdit
+    if (error) throw new Error(error.message || JSON.stringify(error));
     return result.id;
   }, []);
 

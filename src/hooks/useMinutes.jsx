@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { rpcFetch } from '../lib/rpcFetch';
 
 /**
  * Hook for minutes CRUD operations.
@@ -220,8 +221,8 @@ export function useMinutes() {
       location: e.location || null,
     }));
 
-    // BUG-819 FIX: RPC now returns jsonb {id, updated_at} instead of bare uuid
-    const { data: rpcResult, error } = await supabase.rpc('save_minutes_atomic', {
+    // Use raw fetch instead of supabase.rpc() to avoid client hanging bug
+    const { data: rpcResult, error } = await rpcFetch('save_minutes_atomic', {
       p_minutes,
       p_attendance,
       p_business_items,
@@ -230,7 +231,7 @@ export function useMinutes() {
       p_upcoming_events,
     });
 
-    if (error) throw error;
+    if (error) throw new Error(error.message || JSON.stringify(error));
     const minutesId = rpcResult.id;
     const serverUpdatedAt = rpcResult.updated_at;
 
