@@ -1,26 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function useAgendas() {
+export function useAgendas({ autoFetch = true } = {}) {
   const [agendasList, setAgendasList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fetchingRef = useRef(false);
 
   const fetchAgendasList = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('agendas')
-      .select(`
-        id, meeting_type, subcommittee_id, meeting_date, meeting_time,
-        location, status, created_at,
-        subcommittee:subcommittees(name)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) console.error('Error fetching agendas:', error);
-    else setAgendasList(data || []);
-    setLoading(false);
+    // Prevent concurrent fetches
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const { data, error } = await supabase
+        .from('agendas')
+        .select(`
+          id, meeting_type, subcommittee_id, meeting_date, meeting_time,
+          location, status, created_at,
+          subcommittee:subcommittees(name)
+        `)
+        .order('created_at', { ascending: false });
+      if (error) console.error('Error fetching agendas:', error);
+      else setAgendasList(data || []);
+    } finally {
+      fetchingRef.current = false;
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { fetchAgendasList(); }, [fetchAgendasList]);
+  useEffect(() => {
+    if (autoFetch) fetchAgendasList();
+    else setLoading(false);
+  }, [autoFetch, fetchAgendasList]);
 
   const fetchFullAgenda = useCallback(async (id) => {
     const [
@@ -30,7 +40,6 @@ export function useAgendas() {
       supabase.from('agendas').select('*').eq('id', id).maybeSingle(),
       supabase.from('agenda_items').select('*').eq('agenda_id', id).order('sort_order'),
     ]);
-
     if (aErr || !agenda) return null;
     return { ...agenda, _loaded_at: new Date().toISOString(), items: items || [] };
   }, []);
@@ -38,7 +47,6 @@ export function useAgendas() {
   const saveAgenda = useCallback(async (agendaData) => {
     const { items = [], _loaded_at, ...mainData } = agendaData;
 
-    // BUG-804 FIX: Use atomic server-side RPC instead of separate delete+insert
     const p_agenda = {
       id: mainData.id || null,
       _loaded_at: _loaded_at || null,
@@ -65,10 +73,10 @@ export function useAgendas() {
     });
 
     if (error) throw error;
-
-    await fetchAgendasList();
+    // Don't await list refresh here — let the caller handle it
+    // This prevents re-render loops when called from AgendaEdit
     return result.id;
-  }, [fetchAgendasList]);
+  }, []);
 
   const deleteAgenda = useCallback(async (id) => {
     const { error } = await supabase.from('agendas').delete().eq('id', id);
@@ -76,7 +84,6 @@ export function useAgendas() {
     await fetchAgendasList();
   }, [fetchAgendasList]);
 
-  // Generate standard agenda items for a meeting type
   const getStandardItems = useCallback(() => {
     return [
       { title: 'Call to Order', description: '', is_standard: true },

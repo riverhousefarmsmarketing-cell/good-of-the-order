@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
@@ -18,25 +18,21 @@ function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8);
 export default function AgendaEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas();
+  // Don't auto-fetch agenda list — this page only edits a single agenda
+  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas({ autoFetch: false });
   const { organization } = useOrganization();
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-const { toast } = useToast();
+  const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // BUG-036: Warn on unsaved changes before leaving page
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
+  // BUG-036: Track dirty state for unsaved changes warning
+  const [isDirty, setIsDirty] = useState(false);
+  const savingRef = useRef(false);
 
-const isNew = !id;
+  const isNew = !id;
 
   useEffect(() => {
     if (isNew) {
@@ -49,19 +45,47 @@ const isNew = !id;
     }
   }, [id, isNew, fetchFullAgenda, navigate, getStandardItems]);
 
+  // BUG-036: Warn on browser close/refresh with unsaved changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (isDirty && !savingRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => { setDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
+  const u = (field, value) => {
+    setDraft(prev => ({ ...prev, [field]: value }));
+    setIsDirty(true);
+  };
 
   const handleSave = async (status) => {
-    if (saving) return; // BUG-038: prevent double-submit
+    // BUG-038: Prevent double-submit
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
-      setDirty(false); // BUG-036: clear dirty after successful save
-      if (isNew) navigate('/agendas/' + newId, { replace: true });
-    } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
-    finally { setSaving(false); }
+      setIsDirty(false);
+      toast.success('Agenda saved');
+      if (isNew) {
+        navigate('/agendas/' + newId, { replace: true });
+      } else {
+        // Refresh draft with latest data from DB
+        const refreshed = await fetchFullAgenda(id);
+        if (refreshed) setDraft(refreshed);
+      }
+    } catch (err) {
+      toast.error(`Save failed: ${err.message || 'Please try again.'}`);
+    } finally {
+      setSaving(false);
+      savingRef.current = false;
+    }
   };
 
   const handleFinalize = () => {
@@ -111,7 +135,7 @@ const isNew = !id;
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {!isNew && <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
-          <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : '💾 Save'}</button>
           {draft.status === 'draft' && <button onClick={handleFinalize} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Finalize</button>}
           {draft.status !== 'draft' && !isNew && (
             <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
@@ -160,7 +184,7 @@ const isNew = !id;
           ))}
         </div>
       </div>
-<ConfirmDialog
+      <ConfirmDialog
         open={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
