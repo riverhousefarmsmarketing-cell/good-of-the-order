@@ -23,9 +23,18 @@ export default function AgendaEditPage() {
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // BUG-036: Warn on unsaved changes before leaving page
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
 const isNew = !id;
 
@@ -42,12 +51,14 @@ const isNew = !id;
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
+  const u = (field, value) => { setDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async (status) => {
+    if (saving) return; // BUG-038: prevent double-submit
     setSaving(true);
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
+      setDirty(false); // BUG-036: clear dirty after successful save
       if (isNew) navigate('/agendas/' + newId, { replace: true });
     } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
     finally { setSaving(false); }

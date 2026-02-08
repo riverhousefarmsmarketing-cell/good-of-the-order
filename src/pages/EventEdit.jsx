@@ -21,8 +21,17 @@ export default function EventEditPage() {
 
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [subcommittees, setSubcommittees] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // BUG-037: Warn on unsaved changes before leaving page
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const isNew = !id;
 
@@ -62,14 +71,16 @@ export default function EventEditPage() {
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
+  const u = (field, value) => { setDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async () => {
+    if (saving) return; // BUG-039: prevent double-submit
     if (!draft.name) { toast.warning('Please enter an event name.'); return; }
     if (!draft.date) { toast.warning('Please set a date for the event.'); return; }
     setSaving(true);
     try {
       const newId = await saveEvent(draft);
+      setDirty(false); // BUG-037: clear dirty after successful save
       toast.success('Event saved.');
       if (isNew) navigate(`/events/${newId}`, { replace: true });
     } catch (err) {

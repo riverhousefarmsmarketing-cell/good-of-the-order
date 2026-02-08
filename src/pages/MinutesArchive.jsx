@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMinutes } from '../hooks/useMinutes.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
 
@@ -18,6 +19,7 @@ const STATUS_COLORS = {
 
 export default function MinutesArchivePage() {
   const { minutesList, loading, deleteMinutes } = useMinutes();
+  const { isEditor } = useAuth();
   const [filter, setFilter] = useState('all');
 const { toast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -84,10 +86,10 @@ const { toast } = useToast();
                 padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
                 ...(STATUS_COLORS[m.status] || STATUS_COLORS.draft),
               }}>{m.status === 'approved' ? 'Approved' : m.status === 'review' ? 'In Review' : 'Draft'}</span>
-             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
+             {isEditor && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
                 padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
                 borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',
-              }}>Delete</button>
+              }}>Delete</button>}
               <span style={{ color: '#9ca3af' }}>→</span>
             </Link>
           ))}
