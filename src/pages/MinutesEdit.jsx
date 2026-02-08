@@ -39,9 +39,9 @@ export default function MinutesEditPage() {
   const { members } = useMembers();
   const { organization } = useOrganization();
   const isEditor = profile?.role === 'admin' || profile?.role === 'editor';
-  const isLocked = draft?.status === 'approved'; // BUG-030: Lock all fields when finalized
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
+  const isLocked = draft?.status === 'approved'; // BUG-030: Lock all fields when finalized
   const [saving, setSaving] = useState(false);
   const savingRef = React.useRef(false); // BUG-021: synchronous guard against double-submit
   const [errors, setErrors] = useState([]);
