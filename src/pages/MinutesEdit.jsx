@@ -892,17 +892,19 @@ const { toast } = useToast();
         confirmLabel="Delete"
         variant="danger"
       />
-      {/* Send Email Modal */}
-      <SendEmailModal
-        open={showSendModal}
-        onClose={() => setShowSendModal(false)}
-        documentType="minutes"
-        documentId={draft.id}
-        subject={`${MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes — ${fmtDate(draft.meeting_date)}`}
-        htmlBody={generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, organization)}
-        fromName={organization?.name || 'GoodOfTheOrder'}
-        members={members}
-      />
+      {/* Send Email Modal — BUG-088 FIX: Conditional mount prevents React hook count mismatch */}
+      {showSendModal && (
+        <SendEmailModal
+          open={showSendModal}
+          onClose={() => setShowSendModal(false)}
+          documentType="minutes"
+          documentId={draft.id}
+          subject={`${MEETING_TYPES.find(t => t.value === draft.meeting_type)?.label || 'Board'} Meeting Minutes — ${fmtDate(draft.meeting_date)}`}
+          htmlBody={generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, organization)}
+          fromName={organization?.name || 'GoodOfTheOrder'}
+          members={members}
+        />
+      )}
     </div>
   );
 }
