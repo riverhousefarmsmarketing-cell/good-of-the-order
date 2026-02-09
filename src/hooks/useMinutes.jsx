@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { rpcFetch } from '../lib/rpcFetch';
 
 /**
  * Hook for minutes CRUD operations.
  * Handles the main minutes record plus child tables:
  * attendance, business_items, action_items, financial_items, minutes_upcoming_events
+ *
+ * BUG-061 FIX: Added autoFetch option (default: true for backwards compat).
+ * Pages that only need saveMinutes (like MinutesEdit) should pass { autoFetch: false }
+ * to avoid fetching the full minutes list on mount.
  */
 
 // BUG-702: Cache role check to avoid extra DB call on every save
@@ -49,11 +52,12 @@ async function checkWritePermission() {
   }
 }
 
-export function useMinutes() {
+export function useMinutes({ autoFetch = true } = {}) {
   const [minutesList, setMinutesList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoFetch);
 
   const fetchMinutesList = useCallback(async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('minutes')
       .select(`
@@ -71,7 +75,12 @@ export function useMinutes() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchMinutesList(); }, [fetchMinutesList]);
+  // BUG-061 FIX: Only auto-fetch when autoFetch is true
+  useEffect(() => {
+    if (autoFetch) {
+      fetchMinutesList();
+    }
+  }, [autoFetch, fetchMinutesList]);
 
   // Fetch a single minutes record with ALL related data
   const fetchFullMinutes = useCallback(async (id) => {
@@ -221,8 +230,8 @@ export function useMinutes() {
       location: e.location || null,
     }));
 
-    // Use raw fetch instead of supabase.rpc() to avoid client hanging bug
-    const { data: rpcResult, error } = await rpcFetch('save_minutes_atomic', {
+    // BUG-819 FIX: RPC now returns jsonb {id, updated_at} instead of bare uuid
+    const { data: rpcResult, error } = await supabase.rpc('save_minutes_atomic', {
       p_minutes,
       p_attendance,
       p_business_items,
@@ -231,7 +240,7 @@ export function useMinutes() {
       p_upcoming_events,
     });
 
-    if (error) throw new Error(error.message || JSON.stringify(error));
+    if (error) throw error;
     const minutesId = rpcResult.id;
     const serverUpdatedAt = rpcResult.updated_at;
 

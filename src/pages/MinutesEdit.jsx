@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { useMinutes } from '../hooks/useMinutes.jsx';
 import { useMembers } from '../hooks/useMembers.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from './useAuth.js';
+import { useAuth } from './useAuth.jsx';
 
 export function useEmail() {
   const { profile } = useAuth();

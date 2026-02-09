@@ -1,23 +1,38 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function useEvents() {
+/**
+ * BUG-061 FIX: Added autoFetch option + fetch guard.
+ * Also: saveEvent and deleteEvent now do optimistic list updates
+ * instead of re-fetching the entire events list after each operation.
+ */
+export function useEvents({ autoFetch = true } = {}) {
   const [eventsList, setEventsList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoFetch);
+  const fetchingRef = useRef(false);
 
   const fetchEventsList = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('events')
-      .select('*, subcommittees(name), event_vendors(*)')
-      .order('date', { ascending: true });
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('events')
+        .select('*, subcommittees(name), event_vendors(*)')
+        .order('date', { ascending: true });
 
-    if (error) console.error('Error fetching events:', error);
-    setEventsList(data || []);
-    setLoading(false);
+      if (error) console.error('Error fetching events:', error);
+      setEventsList(data || []);
+    } finally {
+      fetchingRef.current = false;
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { fetchEventsList(); }, [fetchEventsList]);
+  useEffect(() => {
+    if (autoFetch) fetchEventsList();
+    else setLoading(false);
+  }, [autoFetch, fetchEventsList]);
 
   const fetchFullEvent = useCallback(async (id) => {
     const { data, error } = await supabase
@@ -87,15 +102,30 @@ export function useEvents() {
       }
     }
 
-    await fetchEventsList();
+    // BUG-061 FIX: Fetch only the saved record instead of re-fetching entire list
+    const { data: updated } = await supabase
+      .from('events')
+      .select('*, subcommittees(name), event_vendors(*)')
+      .eq('id', eventId)
+      .single();
+
+    if (updated) {
+      setEventsList(prev => {
+        const exists = prev.some(e => e.id === eventId);
+        if (exists) return prev.map(e => e.id === eventId ? updated : e);
+        return [...prev, updated].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      });
+    }
+
     return eventId;
-  }, [fetchEventsList]);
+  }, []);
 
   const deleteEvent = useCallback(async (id) => {
     const { error } = await supabase.from('events').delete().eq('id', id);
     if (error) throw error;
-    await fetchEventsList();
-  }, [fetchEventsList]);
+    // BUG-061 FIX: Optimistic remove instead of full re-fetch
+    setEventsList(prev => prev.filter(e => e.id !== id));
+  }, []);
 
   // Fetch next N upcoming events (for board minutes display)
   const fetchUpcomingEvents = useCallback(async (limit = 6) => {
@@ -111,5 +141,5 @@ export function useEvents() {
     return data || [];
   }, []);
 
-  return { eventsList, loading, fetchFullEvent, saveEvent, deleteEvent, fetchUpcomingEvents };
+  return { eventsList, loading, fetchFullEvent, saveEvent, deleteEvent, fetchUpcomingEvents, refresh: fetchEventsList };
 }

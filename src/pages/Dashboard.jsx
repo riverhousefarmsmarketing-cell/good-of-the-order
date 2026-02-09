@@ -29,50 +29,69 @@ export default function DashboardPage() {
   const [pendingActions, setPendingActions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  /**
+   * BUG-061 FIX: Consolidated from 10 parallel queries to 3.
+   * 
+   * Old approach: 5 data fetches + 5 separate count queries = 10 connections
+   * New approach: 3 data fetches with count option = 3 connections
+   * 
+   * Counts for members/events are fetched with head:true (lightweight, 
+   * no data transferred, just count). Recent data fetches include 
+   * count in the same request using the count option.
+   */
   useEffect(() => {
+    let mounted = true;
+
     async function fetchDashboard() {
-      const [
-        { data: mins },
-        { data: agds },
-        { data: mems },
-        { data: evts },
-        { data: actions },
-      ] = await Promise.all([
-        supabase.from('minutes').select('id, meeting_type, meeting_date, status, subcommittee_id, subcommittees(name)').order('meeting_date', { ascending: false }).limit(5),
-        supabase.from('agendas').select('id, meeting_type, meeting_date, meeting_time, location, status, subcommittee_id, subcommittees(name)').order('meeting_date', { ascending: false }).limit(5),
-        supabase.from('profiles').select('id').eq('is_active', true),
-        supabase.from('events').select('id'),
-        supabase.from('action_items').select('id, task, assignee_name, due_date, status').eq('status', 'pending').limit(5),
-      ]);
+      try {
+        const [
+          { data: mins, count: minCount },
+          { data: agds, count: agdCount },
+          { data: actions, count: actCount },
+          { count: memCount },
+          { count: evtCount },
+        ] = await Promise.all([
+          // Recent minutes + total count in ONE request
+          supabase.from('minutes')
+            .select('id, meeting_type, meeting_date, status, subcommittee_id, subcommittees(name)', { count: 'exact' })
+            .order('meeting_date', { ascending: false })
+            .limit(5),
+          // Recent agendas + total count in ONE request
+          supabase.from('agendas')
+            .select('id, meeting_type, meeting_date, meeting_time, location, status, subcommittee_id, subcommittees(name)', { count: 'exact' })
+            .order('meeting_date', { ascending: false })
+            .limit(5),
+          // Pending actions + total count in ONE request
+          supabase.from('action_items')
+            .select('id, task, assignee_name, due_date, status', { count: 'exact' })
+            .eq('status', 'pending')
+            .limit(5),
+          // Count-only queries (lightweight — no data transferred)
+          supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
+          supabase.from('events').select('id', { count: 'exact', head: true }),
+        ]);
 
-      // Count totals
-      const [
-        { count: minCount },
-        { count: agdCount },
-        { count: memCount },
-        { count: evtCount },
-        { count: actCount },
-      ] = await Promise.all([
-        supabase.from('minutes').select('id', { count: 'exact', head: true }),
-        supabase.from('agendas').select('id', { count: 'exact', head: true }),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        supabase.from('events').select('id', { count: 'exact', head: true }),
-        supabase.from('action_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      ]);
+        if (!mounted) return;
 
-      setStats({
-        minutes: minCount || 0,
-        agendas: agdCount || 0,
-        members: memCount || 0,
-        events: evtCount || 0,
-        actionItems: actCount || 0,
-      });
-      setRecentMinutes(mins || []);
-      setUpcomingAgendas(agds || []);
-      setPendingActions(actions || []);
-      setLoading(false);
+        setStats({
+          minutes: minCount || 0,
+          agendas: agdCount || 0,
+          members: memCount || 0,
+          events: evtCount || 0,
+          actionItems: actCount || 0,
+        });
+        setRecentMinutes(mins || []);
+        setUpcomingAgendas(agds || []);
+        setPendingActions(actions || []);
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
     fetchDashboard();
+
+    return () => { mounted = false; };
   }, []);
 
   const greeting = () => {

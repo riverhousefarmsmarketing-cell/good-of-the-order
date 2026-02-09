@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { Navigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 

@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function useMembers() {
+/**
+ * BUG-061 FIX: Added autoFetch option + fetch guard.
+ * Pages that only need member data for dropdowns (like MinutesEdit attendance)
+ * can pass { autoFetch: false } and call refresh() manually when needed.
+ */
+export function useMembers({ autoFetch = true } = {}) {
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoFetch);
   const [error, setError] = useState(null);
+  const fetchingRef = useRef(false);
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -40,8 +46,17 @@ export function useMembers() {
   }, []);
 
   useEffect(() => {
-    Promise.all([fetchMembers(), fetchInvitations()]).finally(() => setLoading(false));
-  }, [fetchMembers, fetchInvitations]);
+    if (!autoFetch) {
+      setLoading(false);
+      return;
+    }
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    Promise.all([fetchMembers(), fetchInvitations()]).finally(() => {
+      fetchingRef.current = false;
+      setLoading(false);
+    });
+  }, [autoFetch, fetchMembers, fetchInvitations]);
 
   const updateMember = useCallback(async (id, updates) => {
     const { error: updateError } = await supabase

@@ -67,11 +67,15 @@ export function useAgendas({ autoFetch = true } = {}) {
       source_minutes_id: item.source_minutes_id || null,
     }));
 
+    console.log('saveAgenda: about to call rpcFetch', p_agenda.id);
+
     // Use raw fetch instead of supabase.rpc() to avoid client hanging bug
     const { data: result, error } = await rpcFetch('save_agenda_atomic', {
       p_agenda,
       p_items,
     });
+
+    console.log('saveAgenda: rpcFetch returned', result, error);
 
     if (error) throw new Error(error.message || JSON.stringify(error));
     return result.id;

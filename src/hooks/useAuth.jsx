@@ -1,8 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { supabase } from '../lib/supabase';
 import { clearRoleCache } from './useMinutes.jsx';
 
-export function useAuth() {
+/**
+ * BUG-061 FIX: Auth is now a Context Provider.
+ * Previously, every component calling useAuth() created independent state
+ * and fired independent Supabase queries (getSession + fetchProfile).
+ * Now auth state is fetched ONCE in AuthProvider and shared to all consumers.
+ *
+ * Migration: Wrap your app in <AuthProvider>, then use useAuth() as before.
+ * The hook API is identical — no changes needed in consuming components.
+ */
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,7 +31,6 @@ export function useAuth() {
         .eq('id', userId)
         .maybeSingle();
       if (error) console.error('Profile fetch error:', error);
-      // Only update state if still the current fetch (prevents race on rapid login/logout)
       if (fetchingRef.current) {
         setProfile(data || null);
       }
@@ -35,7 +46,6 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // 1. Check existing session immediately
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       if (session?.user) {
@@ -48,17 +58,15 @@ export function useAuth() {
       }
     });
 
-    // 2. Listen for changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
-        // Skip INITIAL_SESSION since getSession handles it
         if (event === 'INITIAL_SESSION') return;
 
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         if (currentUser) {
-          fetchingRef.current = false; // allow re-fetch on login
+          fetchingRef.current = false;
           fetchProfile(currentUser.id);
         } else {
           setProfile(null);
@@ -67,7 +75,6 @@ export function useAuth() {
       }
     );
 
-    // 3. Safety timeout — show retry UI instead of forcing logged-out state
     const timeout = setTimeout(() => {
       if (mounted && loading) {
         console.warn('Auth timeout - showing retry UI');
@@ -106,13 +113,13 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     fetchingRef.current = false;
-    clearRoleCache(); // BUG-803 FIX: Reset module-level role cache on logout
+    clearRoleCache();
     const { error } = await supabase.auth.signOut();
     if (!error) { setUser(null); setProfile(null); }
     return { error };
   }, []);
 
-  return {
+  const value = {
     user, profile, loadingSlow,
     organization: profile?.organization ?? null,
     loading,
@@ -120,4 +127,18 @@ export function useAuth() {
     isEditor: profile?.role === 'admin' || profile?.role === 'editor',
     signUp, signUpWithInvite, signIn, signOut,
   };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within AuthProvider. Wrap your app in <AuthProvider>.');
+  }
+  return ctx;
 }

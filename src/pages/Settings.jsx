@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { supabase } from '../lib/supabase';
 import { ConfirmDialog } from '../components/ui/Modal';

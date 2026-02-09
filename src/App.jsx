@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth.js';
+import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './components/ui/Toast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -27,6 +27,7 @@ import AppLayout from './components/layout/AppLayout';
 
 /**
  * LandingOrDashboard — shows LandingPage for visitors, Dashboard for logged-in users.
+ * BUG-061 FIX: useAuth() now reads from shared AuthContext instead of creating independent state.
  */
 function LandingOrDashboard() {
   const { user, profile, organization, loading, loadingSlow } = useAuth();
@@ -119,38 +120,49 @@ function LoadingScreen({ slow }) {
   );
 }
 
+/**
+ * BUG-061 FIX: App is now wrapped in a single AuthProvider.
+ * All useAuth() calls throughout the app share the same state.
+ * Previously each useAuth() call created independent state + fired
+ * independent getSession() + fetchProfile() queries.
+ *
+ * AuthProvider is placed OUTSIDE BrowserRouter because auth state
+ * doesn't depend on routing, and this prevents re-fetching on navigation.
+ */
 export default function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<LandingOrDashboard />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<LandingOrDashboard />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected routes */}
-            <Route element={<ProtectedLayout />}>
-              <Route path="minutes" element={<MinutesArchivePage />} />
-              <Route path="minutes/new" element={<MinutesEditPage />} />
-              <Route path="minutes/:id" element={<MinutesEditPage />} />
-              <Route path="agendas" element={<AgendasListPage />} />
-              <Route path="agendas/new" element={<AgendaEditPage />} />
-              <Route path="agendas/:id" element={<AgendaEditPage />} />
-              <Route path="events" element={<EventsListPage />} />
-              <Route path="events/new" element={<EventEditPage />} />
-              <Route path="events/:id" element={<EventEditPage />} />
-              <Route path="members" element={<MembersPage />} />
-              <Route path="distribution" element={<DistributionListPage />} />
-              <Route path="email-history" element={<EmailHistoryPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+              {/* Protected routes */}
+              <Route element={<ProtectedLayout />}>
+                <Route path="minutes" element={<MinutesArchivePage />} />
+                <Route path="minutes/new" element={<MinutesEditPage />} />
+                <Route path="minutes/:id" element={<MinutesEditPage />} />
+                <Route path="agendas" element={<AgendasListPage />} />
+                <Route path="agendas/new" element={<AgendaEditPage />} />
+                <Route path="agendas/:id" element={<AgendaEditPage />} />
+                <Route path="events" element={<EventsListPage />} />
+                <Route path="events/new" element={<EventEditPage />} />
+                <Route path="events/:id" element={<EventEditPage />} />
+                <Route path="members" element={<MembersPage />} />
+                <Route path="distribution" element={<DistributionListPage />} />
+                <Route path="email-history" element={<EmailHistoryPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
       </ToastProvider>
     </ErrorBoundary>
   );

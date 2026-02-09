@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "sb-qacoauhyahswkluayxhm-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6Ijc2ZWU1YzkxLWY0MWItNDU2Yi1hMzkyLWIzZWNiNDBlNjNiNCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3FhY29hdWh5YWhzd2tsdWF5eGhtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI0ZjkxZjA2Yy00ZGU4LTQxY2EtODZlOC00YTVhNjIwYThmZDAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzcwNTMzMDE0LCJpYXQiOjE3NzA1Mjk0MTQsImVtYWlsIjoiYmFybnBhcnR5QG91dGxvb2suY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6ImJhcm5wYXJ0eUBvdXRsb29rLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmdWxsX25hbWUiOiJDaHJlbiIsIm9yZ2FuaXphdGlvbl9uYW1lIjoiTGV3aXMgQ291bnR5IEZhcm0gQnVyZWF1Iiwib3JnYW5pemF0aW9uX3NsdWciOiJsY2ZiIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI0ZjkxZjA2Yy00ZGU4LTQxY2EtODZlOC00YTVhNjIwYThmZDAifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc3MDUyOTQxNH1dLCJzZXNzaW9uX2lkIjoiZDVmMWNiZmItNzA3ZS00ZmI1LWFiZjItOGE0ZGI4NzIxMDM5IiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.-IJEptQi16LpX2_N_mjjiiho3eRnPYyG_dsgT26_yh08SFR91-ng6_HIMNeoZsCvtCOyfOAcGVVLSAf9fr0HNw\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1770533014,\"refresh_token\":\"dbzwofjghlza\",\"user\":{\"id\":\"4f91f06c-4de8-41ca-86e8-4a5a620a8fd0\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"barnparty@outlook.com\",\"email_confirmed_at\":\"2026-02-07T03:35:37.28957Z\",\"phone\":\"\",\"confirmed_at\":\"2026-02-07T03:35:37.28957Z\",\"last_sign_in_at\":\"2026-02-08T05:43:34.317648518Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email\":\"barnparty@outlook.com\",\"email_verified\":true,\"full_name\":\"Chren\",\"organization_name\":\"Lewis County Farm Bureau\",\"organization_slug\":\"lcfb\",\"phone_verified\":false,\"sub\":\"4f91f06c-4de8-41ca-86e8-4a5a620a8fd0\"},\"identities\":[{\"identity_id\":\"7c72de8b-83f4-4ce1-ac03-e241bee76af9\",\"id\":\"4f91f06c-4de8-41ca-86e8-4a5a620a8fd0\",\"user_id\":\"4f91f06c-4de8-41ca-86e8-4a5a620a8fd0\",\"identity_data\":{\"email\":\"barnparty@outlook.com\",\"email_verified\":false,\"full_name\":\"Chren\",\"organization_name\":\"Lewis County Farm Bureau\",\"organization_slug\":\"lcfb\",\"phone_verified\":false,\"sub\":\"4f91f06c-4de8-41ca-86e8-4a5a620a8fd0\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-02-07T03:35:37.283432Z\",\"created_at\":\"2026-02-07T03:35:37.283509Z\",\"updated_at\":\"2026-02-07T03:35:37.283509Z\",\"email\":\"barnparty@outlook.com\"}],\"created_at\":\"2026-02-07T03:35:37.251244Z\",\"updated_at\":\"2026-02-08T05:43:34.357892Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}
