@@ -37,6 +37,11 @@ function LandingOrDashboard() {
   // Not logged in → show marketing landing page
   if (!user) return <Suspense fallback={<LoadingScreen />}><LandingPage /></Suspense>;
 
+  // BUG-083 FIX: User is set but profile hasn't loaded yet — show loading
+  // This race condition happens after signup when onAuthStateChange fires
+  // before fetchProfile completes
+  if (!profile) return <LoadingScreen />;
+
   // Logged in → show dashboard inside app layout
   return (
     <OrganizationProvider organization={organization}>
@@ -53,6 +58,9 @@ function ProtectedLayout() {
   if (loading) return <LoadingScreen slow={loadingSlow} />;
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // BUG-083 FIX: User set but profile still loading
+  if (!profile) return <LoadingScreen />;
 
   // BUG-013: Check email verification
   if (user && !user.email_confirmed_at) {

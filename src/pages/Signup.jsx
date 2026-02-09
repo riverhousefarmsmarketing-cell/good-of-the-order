@@ -12,6 +12,21 @@ const ORG_TYPES = [
   'Other',
 ];
 
+// BUG-083 FIX: Ensure error messages are always strings, never objects
+// Supabase can return errors where .message is an object, causing React error #300
+function safeErrorMessage(err) {
+  if (!err) return 'An unexpected error occurred. Please try again.';
+  if (typeof err === 'string') return err;
+  if (typeof err.message === 'string' && err.message) return err.message;
+  if (typeof err.msg === 'string' && err.msg) return err.msg;
+  if (typeof err.error_description === 'string') return err.error_description;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'An unexpected error occurred. Please try again.';
+  }
+}
+
 export default function SignupPage() {
   const { user, signUp, signUpWithInvite, loading } = useAuth();
   const [searchParams] = useSearchParams();
@@ -86,17 +101,24 @@ export default function SignupPage() {
   const handleInviteSignup = async () => {
     setSubmitting(true);
     setError(null);
-    const { error: signUpError } = await signUpWithInvite({
-      email: form.email,
-      password: form.password,
-      fullName: form.fullName,
-      invitationToken: inviteToken,
-    });
-    if (signUpError) {
-      setError(signUpError.message);
+    try {
+      const { error: signUpError } = await signUpWithInvite({
+        email: form.email,
+        password: form.password,
+        fullName: form.fullName,
+        invitationToken: inviteToken,
+      });
+      if (signUpError) {
+        // BUG-083 FIX: Safe error extraction
+        setError(safeErrorMessage(signUpError));
+        setSubmitting(false);
+      }
+      // On success, auth state change will redirect
+    } catch (err) {
+      console.error('Invite signup exception:', err);
+      setError(safeErrorMessage(err));
       setSubmitting(false);
     }
-    // On success, auth state change will redirect
   };
 
   const [slugAvailable, setSlugAvailable] = useState(null);
@@ -153,27 +175,45 @@ export default function SignupPage() {
     }
 
     setSubmitting(true);
-    const { error: signUpError } = await signUp({
-      email: form.email,
-      password: form.password,
-      fullName: form.fullName,
-      organizationName: form.organizationName,
-      organizationSlug: form.organizationSlug,
-      organizationType: form.organizationType,
-    });
+    try {
+      const { data, error: signUpError } = await signUp({
+        email: form.email,
+        password: form.password,
+        fullName: form.fullName,
+        organizationName: form.organizationName,
+        organizationSlug: form.organizationSlug,
+        organizationType: form.organizationType,
+      });
 
-    if (signUpError) {
-      // BUG-806 FIX: Map raw Postgres duplicate key error to friendly message
-      const msg = signUpError.message || '';
-      if (msg.includes('duplicate key') || msg.includes('slug') || msg.includes('already exists')) {
-        setSlugAvailable(false);
-        setError('That short name is already taken. Please choose another.');
-      } else {
-        setError(msg);
+      if (signUpError) {
+        // BUG-083 FIX: Safe error message extraction
+        const msg = safeErrorMessage(signUpError);
+        // BUG-806 FIX: Map raw Postgres duplicate key error to friendly message
+        if (msg.includes('duplicate key') || msg.includes('slug') || msg.includes('already exists')) {
+          setSlugAvailable(false);
+          setError('That short name is already taken. Please choose another.');
+        } else {
+          setError(msg);
+        }
+        setSubmitting(false);
+        return;
       }
+
+      // BUG-083 FIX: Check if email confirmation is required
+      // If session is null but user exists, email confirmation is pending
+      if (data?.user && !data?.session) {
+        setError(null);
+        setStep(3); // New step: email confirmation message
+        setSubmitting(false);
+        return;
+      }
+
+      // On success with session, auth state change will redirect
+    } catch (err) {
+      console.error('Signup exception:', err);
+      setError(safeErrorMessage(err));
       setSubmitting(false);
     }
-    // On success, auth state change will redirect
   };
 
   const inputStyle = {
@@ -217,18 +257,22 @@ export default function SignupPage() {
             <span style={{ color: 'white', fontWeight: 700, fontSize: 18 }}>GO</span>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: '0 0 4px' }}>
-            {inviteData ? 'Join Your Organization' : 'Create Your GoodOfTheOrder Portal'}
+            {inviteData ? 'Join Your Organization' :
+             step === 3 ? 'Check Your Email' :
+             'Create Your GoodOfTheOrder Portal'}
           </h1>
           <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
             {inviteData
               ? `You've been invited to join as ${inviteData.role || 'a member'}`
-              : `Step ${step} of 2 - ${step === 1 ? 'Your Account' : 'Organization Setup'}`
+              : step === 3
+                ? 'One more step to get started'
+                : `Step ${step} of 2 - ${step === 1 ? 'Your Account' : 'Organization Setup'}`
             }
           </p>
         </div>
 
         {/* Progress bar */}
-        {!inviteData && (
+        {!inviteData && step !== 3 && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
             <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#1e293b' }} />
             <div style={{ flex: 1, height: 4, borderRadius: 2, background: step >= 2 ? '#1e293b' : '#e2e8f0' }} />
@@ -251,7 +295,39 @@ export default function SignupPage() {
               fontSize: 13,
               marginBottom: 16,
             }}>
-              {error}
+              {/* BUG-083 FIX: Double-safety — always coerce to string */}
+              {typeof error === 'string' ? error : 'An unexpected error occurred. Please try again.'}
+            </div>
+          )}
+
+          {/* BUG-083 FIX: Step 3 — Email confirmation pending */}
+          {step === 3 && (
+            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%', background: '#fef3c7',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px', fontSize: 24,
+              }}>✉</div>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, margin: '0 0 8px' }}>
+                We sent a verification link to <strong>{form.email}</strong>.
+              </p>
+              <p style={{ color: '#64748b', fontSize: 13, lineHeight: 1.6, margin: '0 0 16px' }}>
+                Please check your email and click the link to activate your account. 
+                You can close this tab — the link will log you in automatically.
+              </p>
+              <Link to="/login" style={{
+                display: 'inline-block',
+                padding: '10px 24px',
+                background: '#1e293b',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}>
+                Go to Login
+              </Link>
             </div>
           )}
 
