@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useEvents } from '../hooks/useEvents.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -21,17 +21,17 @@ export default function EventEditPage() {
 
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  
   const [subcommittees, setSubcommittees] = useState([]);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // BUG-037: Warn on unsaved changes before leaving page
-  useEffect(() => {
-    if (!dirty) return;
+ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const savingRef = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
+  React.useEffect(() => {
+    if (!isDirty) return;
     const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
+  }, [isDirty]);
 
   const isNew = !id || id === 'new';
 
@@ -71,7 +71,7 @@ export default function EventEditPage() {
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => { setDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
+  const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async () => {
     if (saving) return; // BUG-039: prevent double-submit
@@ -80,13 +80,14 @@ export default function EventEditPage() {
     setSaving(true);
     try {
       const newId = await saveEvent(draft);
-      setDirty(false); // BUG-037: clear dirty after successful save
+
       toast.success('Event saved.');
       if (isNew) navigate(`/events/${newId}`, { replace: true });
     } catch (err) {
       toast.error(`Save failed: ${err.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
   };
 
