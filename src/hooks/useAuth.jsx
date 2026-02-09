@@ -80,7 +80,7 @@ export function AuthProvider({ children }) {
         console.warn('Auth timeout - showing retry UI');
         setLoadingSlow(true);
       }
-    }, 5000);
+    }, 15000);
 
     return () => {
       mounted = false;

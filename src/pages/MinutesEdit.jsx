@@ -66,7 +66,7 @@ const { toast } = useToast();
 
   // BUG-502 FIX / BUG-815 FIX: Removed uWithDirty — u() always marks dirty (see line 187)
 
-  const isNew = !id;
+  const isNew = !id || id === 'new';
 
   // Fetch subcommittees for the dropdown
   useEffect(() => {
@@ -201,11 +201,18 @@ const { toast } = useToast();
     setErrors([]);
     try {
       // BUG-819 FIX: saveMinutes now returns {id, updated_at}
-      const result = await saveMinutes({ ...draft, status: status || draft.status });
+    const result = await saveMinutes({ ...draft, status: status || draft.status });
       const newId = result.id;
       // Update _loaded_at so subsequent saves use optimistic locking
       setDraft(prev => ({ ...prev, id: newId, _loaded_at: result.updated_at }));
       setIsDirty(false); // BUG-023: Clear dirty flag on success
+      // BUG-066 FIX: Show success toast
+      const finalStatus = status || draft.status;
+      if (finalStatus === 'approved') {
+        toast.success('Minutes finalized successfully.');
+      } else {
+        toast.success('Draft saved.');
+      }
       if (isNew) navigate(`/minutes/${newId}`, { replace: true });
     } catch (err) {
       toast.error(`Save failed: ${err.message || 'Please try again.'}`);
