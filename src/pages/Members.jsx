@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import { useMembers } from '../hooks/useMembers.jsx';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -333,7 +333,7 @@ const { toast } = useToast();
         </div>
       )}
 
-      {/* Invite Modal */}
+      {/* BUG-052: Invite Modal — added onKeyDown for Escape, tabIndex, and autoFocus */}
       {showInvite && (
         <div
           style={{
@@ -342,6 +342,9 @@ const { toast } = useToast();
             alignItems: 'center', justifyContent: 'center', zIndex: 100,
           }}
           onClick={() => setShowInvite(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowInvite(false); }}
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
         >
           <div
             style={{
@@ -373,6 +376,7 @@ const { toast } = useToast();
                 onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                 placeholder="member@example.com"
                 autoFocus
+                onKeyDown={(e) => { if (e.key === 'Escape') setShowInvite(false); }}
                 style={{
                   width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
                   borderRadius: 6, fontSize: 14, boxSizing: 'border-box',

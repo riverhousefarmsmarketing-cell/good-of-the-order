@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
-import { useAuth } from '../hooks/useAuth.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 
 import { useToast } from '../components/ui/Toast';
@@ -18,26 +18,26 @@ function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8);
 export default function AgendaEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  // Don't auto-fetch agenda list — this page only edits a single agenda
-  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas({ autoFetch: false });
+  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas();
   const { organization } = useOrganization();
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
-  const savingRef = React.useRef(false); // BUG-071 FIX: synchronous double-submit guard
   const [showSendModal, setShowSendModal] = useState(false);
-  const { toast } = useToast();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  // BUG-070 FIX: Warn on unsaved changes
+
+  // BUG-036: Warn on unsaved changes when navigating away
   const [isDirty, setIsDirty] = useState(false);
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isDirty) return;
     const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const isNew = !id;
+const { toast } = useToast();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+const isNew = !id;
 
   useEffect(() => {
     if (isNew) {
@@ -55,27 +55,13 @@ export default function AgendaEditPage() {
   const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async (status) => {
-    // BUG-038: Prevent double-submit
-    if (savingRef.current) return;
-    savingRef.current = true;
     setSaving(true);
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
-      setIsDirty(false);
-      toast.success('Agenda saved');
-      if (isNew) {
-        navigate('/agendas/' + newId, { replace: true });
-      } else {
-        // Refresh draft with latest data from DB
-        const refreshed = await fetchFullAgenda(id);
-        if (refreshed) setDraft(refreshed);
-      }
-    } catch (err) {
-      toast.error(`Save failed: ${err.message || 'Please try again.'}`);
-    } finally {
-      setSaving(false);
-      savingRef.current = false;
-    }
+      setIsDirty(false); // BUG-036: Clear dirty flag on success
+      if (isNew) navigate('/agendas/' + newId, { replace: true });
+    } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
+    finally { setSaving(false); }
   };
 
   const handleFinalize = () => {
@@ -125,7 +111,7 @@ export default function AgendaEditPage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {!isNew && <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: '8px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Delete</button>}
-          <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : '💾 Save'}</button>
+          <button onClick={() => handleSave()} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{saving ? 'Saving...' : 'Save'}</button>
           {draft.status === 'draft' && <button onClick={handleFinalize} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>Finalize</button>}
           {draft.status !== 'draft' && !isNew && (
             <button onClick={() => setShowSendModal(true)} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>✉ Send</button>
@@ -174,7 +160,7 @@ export default function AgendaEditPage() {
           ))}
         </div>
       </div>
-      <ConfirmDialog
+<ConfirmDialog
         open={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
@@ -199,7 +185,7 @@ export default function AgendaEditPage() {
 }
 
 // HTML escape helper (BUG-025: prevent XSS in email HTML)
-const escA = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const escA = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function generateAgendaEmailHtml(draft, mt, fmtDate, org) {
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
