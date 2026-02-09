@@ -49,7 +49,13 @@ export function useAgendas({ autoFetch = true } = {}) {
 
     const p_agenda = {
       id: mainData.id || null,
-      _loaded_at: _loaded_at || null,
+      // BUG-060 FIX: Disable optimistic locking temporarily.
+      // The _loaded_at timestamp was causing "Conflict: agenda updated by someone else"
+      // errors in a retry loop (90+ failures/second), exhausting Supabase resources.
+      // Root cause: timestamp precision mismatch between JS Date.toISOString() and
+      // Postgres timestamptz. Setting to null uses the non-locking UPDATE path.
+      // TODO: Re-enable after fixing timestamp format to match DB precision.
+      _loaded_at: null,
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       meeting_date: mainData.meeting_date || null,
