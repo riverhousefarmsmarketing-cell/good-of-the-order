@@ -129,6 +129,30 @@ function LoadingScreen({ slow }) {
 }
 
 /**
+ * BUG-086 FIX: Role-based route guard.
+ * Wraps routes that require a minimum role level.
+ * Roles: admin > editor > viewer
+ */
+function RoleGuard({ minRole, children }) {
+  const { profile } = useAuth();
+  const roleLevel = { admin: 3, editor: 2, viewer: 1 };
+  const userLevel = roleLevel[profile?.role] || 0;
+  const requiredLevel = roleLevel[minRole] || 0;
+
+  if (userLevel < requiredLevel) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+        <h2 style={{ color: '#1e293b', marginBottom: 8 }}>Access Restricted</h2>
+        <p>You need {minRole} permissions to access this page.</p>
+        <a href="/" style={{ marginTop: 16, display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, textDecoration: 'none' }}>← Back to Dashboard</a>
+      </div>
+    );
+  }
+
+  return children;
+}
+
+/**
  * BUG-061 FIX: App is now wrapped in a single AuthProvider.
  * All useAuth() calls throughout the app share the same state.
  * Previously each useAuth() call created independent state + fired
@@ -151,21 +175,27 @@ export default function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-              {/* Protected routes */}
+              {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
               <Route element={<ProtectedLayout />}>
+                {/* Viewer+ (all authenticated users) */}
                 <Route path="minutes" element={<MinutesArchivePage />} />
-                <Route path="minutes/new" element={<MinutesEditPage />} />
                 <Route path="minutes/:id" element={<MinutesEditPage />} />
                 <Route path="agendas" element={<AgendasListPage />} />
-                <Route path="agendas/new" element={<AgendaEditPage />} />
                 <Route path="agendas/:id" element={<AgendaEditPage />} />
                 <Route path="events" element={<EventsListPage />} />
-                <Route path="events/new" element={<EventEditPage />} />
                 <Route path="events/:id" element={<EventEditPage />} />
-                <Route path="members" element={<MembersPage />} />
-                <Route path="distribution" element={<DistributionListPage />} />
                 <Route path="email-history" element={<EmailHistoryPage />} />
-                <Route path="settings" element={<SettingsPage />} />
+
+                {/* Editor+ (admin or editor) */}
+                <Route path="minutes/new" element={<RoleGuard minRole="editor"><MinutesEditPage /></RoleGuard>} />
+                <Route path="agendas/new" element={<RoleGuard minRole="editor"><AgendaEditPage /></RoleGuard>} />
+                <Route path="events/new" element={<RoleGuard minRole="editor"><EventEditPage /></RoleGuard>} />
+
+                {/* Admin only */}
+                <Route path="members" element={<RoleGuard minRole="admin"><MembersPage /></RoleGuard>} />
+                <Route path="distribution" element={<RoleGuard minRole="admin"><DistributionListPage /></RoleGuard>} />
+                <Route path="settings" element={<RoleGuard minRole="admin"><SettingsPage /></RoleGuard>} />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
