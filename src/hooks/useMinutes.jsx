@@ -240,8 +240,11 @@ export function useMinutes({ autoFetch = true } = {}) {
       p_upcoming_events,
     });
 
-    if (error) throw error;
-    const minutesId = rpcResult.id;
+ if (error) throw error;
+if (!rpcResult || typeof rpcResult !== 'object') {
+  throw new Error('Save succeeded but received unexpected response');
+}
+const minutesId = rpcResult.id;
     const serverUpdatedAt = rpcResult.updated_at;
 
     // BUG-702 FIX: Fetch only the saved record and merge into list (not full re-fetch)

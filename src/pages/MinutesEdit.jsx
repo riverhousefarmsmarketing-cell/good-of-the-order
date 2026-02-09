@@ -28,7 +28,7 @@ function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8);
 
 // BUG-019: Sanitize money input - allow digits, decimal, comma, leading $
 function sanitizeMoney(val) {
-  return val.replace(/[^0-9.,\-$]/g, '');
+  return String(val ?? '').replace(/[^0-9.,\-$]/g, '');
 }
 
 export default function MinutesEditPage() {
