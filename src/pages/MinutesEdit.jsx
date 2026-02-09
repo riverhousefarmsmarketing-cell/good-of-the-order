@@ -902,7 +902,7 @@ const { toast } = useToast();
 
 // Generate email HTML from minutes draft
 // HTML escape helpers (BUG-025: prevent XSS in email HTML)
-const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escNl = (s) => esc(s).replace(/\n/g, '<br>');
 
 function generateMinutesEmailHtml(draft, fmtMember, fmtDate, isSC, MEETING_TYPES, QUORUM_OPTIONS, org) {
