@@ -141,7 +141,7 @@ export function useMinutes({ autoFetch = true } = {}) {
     // Build the payload for the atomic RPC
     const p_minutes = {
       id: mainData.id || null,
-      _loaded_at: minutesData._loaded_at || null,
+      _loaded_at: null,
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       agenda_id: mainData.agenda_id || null,
