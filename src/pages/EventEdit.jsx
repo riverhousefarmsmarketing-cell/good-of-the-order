@@ -33,7 +33,7 @@ export default function EventEditPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  const isNew = !id;
+  const isNew = !id || id === 'new';
 
   // Fetch subcommittees for dropdown
   useEffect(() => {

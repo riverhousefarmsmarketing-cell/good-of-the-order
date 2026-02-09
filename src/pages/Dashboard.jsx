@@ -206,7 +206,7 @@ export default function DashboardPage() {
         {/* Activity / Getting Started */}
         <Panel title="Getting Started">
           <div style={{ fontSize: 13, color: '#475569', lineHeight: 2 }}>
-            <Step done={!!branding?.logoUrl} label="Upload your logo" to="/settings" />
+            <Step done={!!branding?.logo_url} label="Upload your logo" to="/settings" />
             <Step done={stats.members > 1} label="Invite board members" to="/members" />
             <Step done={stats.agendas > 0} label="Create your first agenda" to="/agendas/new" />
             <Step done={stats.minutes > 0} label="Record meeting minutes" to="/minutes/new" />

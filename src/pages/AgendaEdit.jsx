@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
@@ -24,13 +24,18 @@ export default function AgendaEditPage() {
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = React.useRef(false); // BUG-071 FIX: synchronous double-submit guard
   const [showSendModal, setShowSendModal] = useState(false);
   const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // BUG-036: Track dirty state for unsaved changes warning
+  // BUG-070 FIX: Warn on unsaved changes
   const [isDirty, setIsDirty] = useState(false);
-  const savingRef = useRef(false);
+  React.useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const isNew = !id;
 
@@ -45,24 +50,9 @@ export default function AgendaEditPage() {
     }
   }, [id, isNew, fetchFullAgenda, navigate, getStandardItems]);
 
-  // BUG-036: Warn on browser close/refresh with unsaved changes
-  useEffect(() => {
-    const handler = (e) => {
-      if (isDirty && !savingRef.current) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
-
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => {
-    setDraft(prev => ({ ...prev, [field]: value }));
-    setIsDirty(true);
-  };
+  const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
 
   const handleSave = async (status) => {
     // BUG-038: Prevent double-submit
@@ -209,7 +199,7 @@ export default function AgendaEditPage() {
 }
 
 // HTML escape helper (BUG-025: prevent XSS in email HTML)
-const escA = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const escA = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function generateAgendaEmailHtml(draft, mt, fmtDate, org) {
   let html = `<div style="max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">`;
