@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [loadingSlow, setLoadingSlow] = useState(false);
   const fetchingRef = useRef(false);
+  const loadedRef = useRef(false);
 
   const fetchProfile = useCallback(async (userId) => {
     if (fetchingRef.current) return;
@@ -39,6 +40,7 @@ export function AuthProvider({ children }) {
       if (fetchingRef.current) setProfile(null);
     } finally {
       fetchingRef.current = false;
+      loadedRef.current = true;
       setLoading(false);
     }
   }, []);
@@ -54,6 +56,7 @@ export function AuthProvider({ children }) {
       } else {
         setUser(null);
         setProfile(null);
+        loadedRef.current = true;
         setLoading(false);
       }
     });
@@ -76,8 +79,8 @@ export function AuthProvider({ children }) {
     );
 
     const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth timeout - showing retry UI');
+      if (mounted && !loadedRef.current) {
+        console.warn('Auth loading slow — showing retry UI');
         setLoadingSlow(true);
       }
     }, 15000);
