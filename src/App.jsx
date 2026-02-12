@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
+import { AuthProvider, useAuth } from './hooks/useAuthx';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './components/ui/Toast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
