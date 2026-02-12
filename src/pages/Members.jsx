@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth.js';
+import { useAuth } from '../hooks/useAuth';
 import { useMembers } from '../hooks/useMembers.jsx';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
