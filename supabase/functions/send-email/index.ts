@@ -3,7 +3,7 @@
 // (NO --no-verify-jwt flag — JWT verification is now required)
 // Set secrets:
 //   supabase secrets set RESEND_API_KEY=re_xxxxxxxx
-//   supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app
+//   supabase secrets set ALLOWED_ORIGIN=https://goodoftheorder.app
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -12,16 +12,26 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
-if (!ALLOWED_ORIGIN) {
-  console.warn('ALLOWED_ORIGIN not set — defaulting to restrictive same-origin. Set this env var for production.')
-}
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN || 'https://goodoftheorder.app',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// BUG-091 FIX: Support multiple origins (www and non-www custom domain + Vercel)
+const ALLOWED_ORIGINS = [
+  ALLOWED_ORIGIN,
+  'https://goodoftheorder.app',
+  'https://www.goodoftheorder.app',
+].filter(Boolean) as string[]
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  const matched = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] || ''
+  return {
+    'Access-Control-Allow-Origin': matched,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
