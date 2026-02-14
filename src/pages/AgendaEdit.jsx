@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
@@ -23,6 +23,7 @@ export default function AgendaEditPage() {
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false); // BUG-038: synchronous guard against double-submit
   const [showSendModal, setShowSendModal] = useState(false);
 
   // BUG-036: Warn on unsaved changes when navigating away
@@ -74,13 +75,16 @@ const isNew = !id;
   };
 
   const handleSave = async (status) => {
+    // BUG-038: Synchronous double-submit guard
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
       setIsDirty(false); // BUG-036: Clear dirty flag on success
       if (isNew) navigate('/agendas/' + newId, { replace: true });
     } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
-    finally { setSaving(false); }
+    finally { setSaving(false); savingRef.current = false; }
   };
 
   const handleFinalize = () => {

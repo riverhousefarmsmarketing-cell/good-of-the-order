@@ -91,12 +91,12 @@ const { toast } = useToast();
         <>
           {upcoming.length > 0 && (
             <Section title={`Upcoming (${upcoming.length})`} color="#059669">
-             {upcoming.map(e => <EventRow key={e.id} event={e} onDelete={setDeleteTarget} />)}
+             {upcoming.map(e => <EventRow key={e.id} event={e} onDelete={isEditor ? setDeleteTarget : null} />)}
             </Section>
           )}
           {past.length > 0 && (
             <Section title={`Past (${past.length})`} color="#64748b">
-              {past.slice(0, 10).map(e => <EventRow key={e.id} event={e} onDelete={setDeleteTarget} faded />)}
+              {past.slice(0, 10).map(e => <EventRow key={e.id} event={e} onDelete={isEditor ? setDeleteTarget : null} faded />)}
             </Section>
           )}
           {eventsList.length === 0 && (
@@ -159,10 +159,10 @@ function EventRow({ event: e, onDelete, faded }) {
         </div>
       </div>
       {e.purpose && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: PURPOSE_COLORS[e.purpose] || '#f1f5f9', color: '#374151' }}>{e.purpose}</span>}
-      <button onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onDelete(e.id); }} style={{
+      {onDelete && <button onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onDelete(e.id); }} style={{
         padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
         borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',
-      }}>Delete</button>
+      }}>Delete</button>}
       <span style={{ color: '#9ca3af' }}>→</span>
     </Link>
   );
