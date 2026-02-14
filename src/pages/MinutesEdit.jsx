@@ -204,7 +204,7 @@ const { toast } = useToast();
     const result = await saveMinutes({ ...draft, status: status || draft.status });
       const newId = result.id;
       // Update _loaded_at so subsequent saves use optimistic locking
-      setDraft(prev => ({ ...prev, id: newId, _loaded_at: result.updated_at }));
+      setDraft(prev => ({ ...prev, id: newId, _loaded_at: result.updated_at, status: status || prev.status }));
       setIsDirty(false); // BUG-023: Clear dirty flag on success
       // BUG-066 FIX: Show success toast
       const finalStatus = status || draft.status;
