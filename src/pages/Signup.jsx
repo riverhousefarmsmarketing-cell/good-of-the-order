@@ -44,14 +44,23 @@ export default function SignupPage() {
     setInviteLoading(true);
     supabase.rpc('lookup_invitation', { invite_token: inviteToken })
       .then(({ data, error: lookupErr }) => {
-        if (lookupErr || !data || data.length === 0) {
+        if (lookupErr) {
+          console.error('Invite lookup error:', lookupErr);
+          setError('This invitation link is invalid or has expired.');
+          setInviteData(null);
+        } else if (!data || (Array.isArray(data) && data.length === 0)) {
           setError('This invitation link is invalid or has expired.');
           setInviteData(null);
         } else {
-          const inv = data[0];
+          const inv = Array.isArray(data) ? data[0] : data;
           setInviteData(inv);
           setForm(prev => ({ ...prev, email: inv.email || '' }));
         }
+        setInviteLoading(false);
+      })
+      .catch((err) => {
+        console.error('Invite lookup exception:', err);
+        setError('Unable to verify invitation. Please try again.');
         setInviteLoading(false);
       });
   }, [inviteToken]);
