@@ -334,8 +334,8 @@ export default function SendEmailModal({ open, onClose, documentType, documentId
               <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Previously Sent</div>
               {logs.slice(0, 3).map(log => (
                 <div key={log.id} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
-                  {new Date(log.sent_at).toLocaleString()} — {log.recipient_emails?.length} recipients
-                  {log.sent_by_profile?.full_name && ` — by ${log.sent_by_profile.full_name}`}
+                  {new Date(log.sent_at).toLocaleString()} — {Array.isArray(log.recipient_emails) ? log.recipient_emails.length : 0} recipients
+                  {(() => { const p = Array.isArray(log.sent_by_profile) ? log.sent_by_profile[0] : log.sent_by_profile; return p?.full_name ? ` — by ${p.full_name}` : ''; })()}
                 </div>
               ))}
             </div>
