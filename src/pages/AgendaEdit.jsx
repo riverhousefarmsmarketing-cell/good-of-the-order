@@ -241,8 +241,8 @@ const isNew = !id;
         variant="danger"
       />
 
-      {/* Send Email Modal */}
-      <SendEmailModal
+      {/* Send Email Modal — only mount when open to prevent hook-related render crash */}
+      {showSendModal && <SendEmailModal
         open={showSendModal}
         onClose={() => setShowSendModal(false)}
         documentType="agenda"
@@ -250,7 +250,7 @@ const isNew = !id;
         subject={`${mt} Meeting Agenda — ${fmtDate(draft.meeting_date)}`}
         htmlBody={generateAgendaEmailHtml(draft, mt, fmtDate, organization)}
         fromName={organization?.name || 'GoodOfTheOrder'}
-      />
+      />}
     </div>
   );
 }
