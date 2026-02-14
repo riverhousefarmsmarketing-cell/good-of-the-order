@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
+import { useAuth } from '../hooks/useAuth';
 
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
@@ -15,6 +16,7 @@ const STATUS_COLORS = {
 
 export default function AgendasListPage() {
   const { agendasList, loading } = useAgendas();
+  const { isEditor } = useAuth();
 
   const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date TBD';
 
@@ -24,18 +26,18 @@ export default function AgendasListPage() {
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1e293b', margin: 0 }}>Agendas</h1>
-        <Link to="/agendas/new" style={{
+        {isEditor && <Link to="/agendas/new" style={{
           padding: '10px 20px', background: '#1e293b', color: 'white',
           border: 'none', borderRadius: 6, fontWeight: 600, textDecoration: 'none', fontSize: 14,
-        }}>+ New Agenda</Link>
+        }}>+ New Agenda</Link>}
       </div>
 
       {agendasList.length === 0 ? (
         <div style={{ padding: 64, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
           <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>☰</div>
           <div style={{ color: '#64748b', fontSize: 15, fontWeight: 500, marginBottom: 6 }}>No agendas yet</div>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>Create an agenda to prepare for your next board meeting.</div>
-          <Link to="/agendas/new" style={{ display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: 'white', borderRadius: 6, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>+ Create Agenda</Link>
+          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>{isEditor ? 'Create an agenda to prepare for your next board meeting.' : 'No agendas have been created yet.'}</div>
+          {isEditor && <Link to="/agendas/new" style={{ display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: 'white', borderRadius: 6, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>+ Create Agenda</Link>}
         </div>
       ) : (
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>

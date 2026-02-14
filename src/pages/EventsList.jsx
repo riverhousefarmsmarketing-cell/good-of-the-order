@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEvents } from '../hooks/useEvents.jsx';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
 
@@ -13,6 +14,7 @@ const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US',
 
 export default function EventsListPage() {
   const { eventsList, loading, deleteEvent } = useEvents();
+  const { isEditor } = useAuth();
   const [view, setView] = useState('list');
   const [calMonth, setCalMonth] = useState(new Date());
 const { toast } = useToast();
@@ -47,10 +49,10 @@ const { toast } = useToast();
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setView('list')} style={tabBtn(view === 'list')}>List</button>
           <button onClick={() => setView('calendar')} style={tabBtn(view === 'calendar')}>Calendar</button>
-          <Link to="/events/new" style={{
+          {isEditor && <Link to="/events/new" style={{
             padding: '10px 20px', background: '#1e293b', color: 'white',
             border: 'none', borderRadius: 6, fontWeight: 600, textDecoration: 'none', fontSize: 14, marginLeft: 8,
-          }}>+ New Event</Link>
+          }}>+ New Event</Link>}
         </div>
       </div>
 

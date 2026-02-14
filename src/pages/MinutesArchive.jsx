@@ -38,10 +38,10 @@ const { toast } = useToast();
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1e293b', margin: 0 }}>Minutes Archive</h1>
-        <Link to="/minutes/new" style={{
+        {isEditor && <Link to="/minutes/new" style={{
           padding: '10px 20px', background: '#1e293b', color: 'white',
           border: 'none', borderRadius: 6, fontWeight: 600, textDecoration: 'none', fontSize: 14,
-        }}>+ New Minutes</Link>
+        }}>+ New Minutes</Link>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>

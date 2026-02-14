@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { path: '/minutes', label: 'Minutes', icon: '≡', exact: true },
   { path: '/minutes/new', label: 'New', icon: '▤', activePath: '/minutes/new', minRole: 'editor' },
   { path: '/events', label: 'Events', icon: '◇' },
-  { path: '/members', label: 'Members', icon: '○' },
+  { path: '/members', label: 'Members', icon: '○', minRole: 'admin' },
   { path: '/distribution', label: 'Distribution', icon: '✉', minRole: 'editor' },
   { path: '/email-history', label: 'Email Log', icon: '↗' },
 ];
