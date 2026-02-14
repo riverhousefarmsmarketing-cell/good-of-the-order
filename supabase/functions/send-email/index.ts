@@ -100,11 +100,12 @@ serve(async (req) => {
     // Send via Resend
     const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`
 
-    // ── FIX BUG-010 + BUG-091b: Privacy-preserving recipient handling ──
-    // Send TO the first recipient, remaining as BCC.
-    // Recipients cannot see other BCC addresses — only the first recipient
-    // is visible in the "To" header, which is acceptable for org distribution.
-    // This avoids domain suppression issues from using a fake/noreply TO address.
+    // ── FIX BUG-010 + BUG-091b: Recipient handling ────────────────────
+    // First recipient in TO, rest in BCC. This avoids using a @goodoftheorder.app
+    // address as TO, which triggers domain-wide suppression in Resend and blocks
+    // delivery to ALL recipients including BCC.
+    // Trade-off: first recipient's address is visible in the To header.
+    // Acceptable for org board distribution where all members know each other.
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
