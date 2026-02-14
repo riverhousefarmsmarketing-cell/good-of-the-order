@@ -82,10 +82,10 @@ const isNew = !id;
     try {
       const newId = await saveAgenda({ ...draft, status: status || draft.status });
       const newStatus = status || draft.status;
-      setDraft(prev => ({ ...prev, id: newId, status: newStatus }));
+      setDraft(prev => ({ ...prev, id: newId || prev.id, status: newStatus }));
       setIsDirty(false); // BUG-036: Clear dirty flag on success
       toast.success('Agenda saved.');
-      if (isNew) navigate('/agendas/' + newId, { replace: true });
+      if (isNew && newId) navigate('/agendas/' + newId, { replace: true });
     } catch (err) { toast.error(`Save failed: ${err.message || 'Please try again.'}`); }
     finally { setSaving(false); savingRef.current = false; }
   };
