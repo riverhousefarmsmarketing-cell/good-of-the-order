@@ -35,7 +35,10 @@ export default function AgendaEditPage() {
   }, [isDirty]);
 
   // BUG-036: Block React Router navigation when dirty
-  const blocker = useBlocker(isDirty);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname
+  );
 
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
