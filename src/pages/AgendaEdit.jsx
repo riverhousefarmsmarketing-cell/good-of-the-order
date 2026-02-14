@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { useAuth } from '../hooks/useAuth';
@@ -33,12 +33,6 @@ export default function AgendaEditPage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
-
-  // BUG-036: Block React Router navigation when dirty
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      isDirty && currentLocation.pathname !== nextLocation.pathname
-  );
 
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -111,7 +105,7 @@ const isNew = !id;
     <div style={{ background: '#f8fafc', minHeight: 'calc(100vh - 56px)' }}>
       <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link to="/agendas" style={{ padding: '7px 14px', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, textDecoration: 'none', color: '#374151' }}>← Back</Link>
+          <button onClick={() => { if (!isDirty || window.confirm('You have unsaved changes. Are you sure you want to leave?')) navigate('/agendas'); }} style={{ padding: '7px 14px', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, color: '#374151' }}>← Back</button>
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: '#1e293b' }}>{isNew ? 'Create' : 'Edit'} Agenda</h1>
           <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: draft.status === 'sent' ? '#dcfce7' : draft.status === 'final' ? '#dbeafe' : '#fef3c7', color: draft.status === 'sent' ? '#166534' : draft.status === 'final' ? '#1e40af' : '#92400e' }}>{draft.status}</span>
         </div>
@@ -176,17 +170,6 @@ const isNew = !id;
         variant="danger"
       />
 
-      {/* BUG-036: Unsaved changes navigation blocker */}
-      <ConfirmDialog
-        open={blocker.state === 'blocked'}
-        onClose={() => blocker.reset()}
-        onConfirm={() => blocker.proceed()}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Are you sure you want to leave? Your changes will be lost."
-        confirmLabel="Leave"
-        variant="danger"
-      />
-         
       {/* Send Email Modal */}
       <SendEmailModal
         open={showSendModal}
