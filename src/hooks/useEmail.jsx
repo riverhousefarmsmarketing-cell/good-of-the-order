@@ -63,6 +63,7 @@ export function useEmail() {
   };
 
   // === Send Email ===
+  // SECURITY: organization_id and sent_by are derived server-side from JWT
   const sendEmail = async ({ to, subject, html, documentType, documentId, fromName }) => {
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: {
@@ -70,10 +71,8 @@ export function useEmail() {
         subject,
         html,
         from_name: fromName || 'GoodOfTheOrder',
-        organization_id: orgId,
         document_type: documentType,
         document_id: documentId,
-        sent_by: profile?.id,
       },
     });
     if (error) throw error;

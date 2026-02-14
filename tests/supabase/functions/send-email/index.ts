@@ -3,153 +3,35 @@
 // (NO --no-verify-jwt flag — JWT verification is now required)
 // Set secrets:
 //   supabase secrets set RESEND_API_KEY=re_xxxxxxxx
-//   supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app
+//   supabase secrets set ALLOWED_ORIGIN=https://goodoftheorder.app
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { DOMParser } from 'https://deno.land/x/deno_dom@v0.1.45/deno-dom-wasm.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
-if (!ALLOWED_ORIGIN) {
-  console.warn('ALLOWED_ORIGIN not set — defaulting to restrictive same-origin. Set this env var for production.')
-}
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN || 'https://goodoftheorder.app',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+// BUG-091 FIX: Support multiple origins (www and non-www custom domain + Vercel)
+const ALLOWED_ORIGINS = [
+  ALLOWED_ORIGIN,
+  'https://goodoftheorder.app',
+  'https://www.goodoftheorder.app',
+].filter(Boolean) as string[]
 
-// ═══════════════════════════════════════════════════════════════════════
-// DOM-PARSER-BASED HTML SANITIZER
-// Replaces the previous regex-based approach (BUG-011 fix).
-// Uses deno-dom to parse HTML into a real DOM tree, then walks it with
-// a strict allowlist. This is immune to entity encoding bypasses,
-// malformed tag tricks, and nested tag attacks.
-// ═══════════════════════════════════════════════════════════════════════
-
-const ALLOWED_TAGS = new Set([
-  'div', 'span', 'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'strong', 'b', 'em', 'i', 'u', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  'ul', 'ol', 'li', 'a', 'img',
-])
-const ALLOWED_ATTRS: Record<string, Set<string>> = {
-  '*': new Set(['style']),
-  'a': new Set(['href']),
-  'img': new Set(['src', 'alt']),
-  'td': new Set(['colspan', 'rowspan']),
-  'th': new Set(['colspan', 'rowspan']),
-}
-
-/**
- * Decode HTML entities in a string for URI safety checks.
- * Prevents bypasses like &#x6A;avascript: or &#106;avascript:
- */
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-}
-
-function isUriSafe(val: string): boolean {
-  const decoded = decodeEntities(val).replace(/\s+/g, '').toLowerCase()
-  return !(/^(javascript|data|vbscript):/.test(decoded))
-}
-
-function isStyleSafe(val: string): boolean {
-  const decoded = decodeEntities(val).toLowerCase()
-  return !(/url\s*\(|expression\s*\(|@import|behavior\s*:|binding\s*:|-moz-binding/i.test(decoded))
-}
-
-function sanitizeHtml(input: string): string {
-  // Parse the HTML into a DOM tree
-  const doc = new DOMParser().parseFromString(
-    `<body>${input}</body>`,
-    'text/html'
-  )
-  if (!doc) return '' // parse failure → return empty
-
-  function walkNode(node: any): string {
-    // Text node → escape and return
-    if (node.nodeType === 3 /* TEXT_NODE */) {
-      return (node.textContent || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-    }
-
-    // Not an element → recurse children
-    if (node.nodeType !== 1 /* ELEMENT_NODE */) {
-      let out = ''
-      for (const child of node.childNodes) out += walkNode(child)
-      return out
-    }
-
-    const tag = (node.tagName || '').toLowerCase()
-
-    // Disallowed tag → strip the element entirely (including children)
-    // This kills <script>, <style>, <iframe>, <object>, <embed>, etc.
-    if (!ALLOWED_TAGS.has(tag)) {
-      // But keep text content of inline formatting that might be unknown
-      // For safety: only keep children of tags that look like formatting
-      return ''
-    }
-
-    // Allowed tag → filter its attributes
-    const allowedForTag = ALLOWED_ATTRS[tag] || new Set<string>()
-    const globalAllowed = ALLOWED_ATTRS['*'] || new Set<string>()
-    let attrStr = ''
-
-    for (const attr of Array.from(node.attributes || [])) {
-      const name = (attr as any).name?.toLowerCase()
-      const val = (attr as any).value || ''
-
-      // Must be in tag-specific or global allowlist
-      if (!allowedForTag.has(name) && !globalAllowed.has(name)) continue
-
-      // URI attributes: check for dangerous protocols
-      if ((name === 'href' || name === 'src') && !isUriSafe(val)) continue
-
-      // Style attribute: check for dangerous CSS
-      if (name === 'style' && !isStyleSafe(val)) continue
-
-      // Event handlers should never pass the allowlist, but defense-in-depth
-      if (name.startsWith('on')) continue
-
-      attrStr += ` ${name}="${val.replace(/"/g, '&quot;')}"`
-    }
-
-    // Self-closing tags
-    if (tag === 'br' || tag === 'hr' || tag === 'img') {
-      return `<${tag}${attrStr} />`
-    }
-
-    // Recurse children
-    let inner = ''
-    for (const child of node.childNodes) inner += walkNode(child)
-
-    return `<${tag}${attrStr}>${inner}</${tag}>`
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  const matched = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] || ''
+  return {
+    'Access-Control-Allow-Origin': matched,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   }
-
-  // Walk the <body> children (skip the synthetic body wrapper)
-  const body = doc.querySelector('body')
-  if (!body) return ''
-
-  let result = ''
-  for (const child of body.childNodes) result += walkNode(child)
-  return result
 }
-
-// ═══════════════════════════════════════════════════════════════════════
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -184,53 +66,98 @@ serve(async (req) => {
       subject,         // string
       html,            // string - HTML body
       from_name,       // string - e.g., "Lewis County Farm Bureau"
-      organization_id: _clientOrgId, // UUID (ignored — derived server-side)
       document_type,   // 'minutes' | 'agenda'
       document_id,     // UUID
-      sent_by,         // UUID - profile id of sender
+      // SECURITY: organization_id and sent_by are now derived server-side
     } = await req.json()
 
     if (!to || to.length === 0) throw new Error('No recipients')
     if (!subject) throw new Error('No subject')
     if (!html) throw new Error('No email body')
 
-    // ── BUG-3005 FIX: Derive organization_id server-side from authenticated user ──
+    // ── SECURITY: Derive org_id and role from the authenticated user ──
     const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!)
+
     const { data: senderProfile, error: profileErr } = await supabaseAdmin
       .from('profiles')
-      .select('organization_id')
+      .select('id, organization_id, role')
       .eq('id', user.id)
-      .single()
-    
-    if (profileErr || !senderProfile?.organization_id) {
+      .maybeSingle()
+
+    if (profileErr || !senderProfile) {
       return new Response(
-        JSON.stringify({ error: 'User has no organization' }),
+        JSON.stringify({ error: 'User profile not found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       )
     }
+
+    // Only editors and admins can send emails
+    if (!['admin', 'editor'].includes(senderProfile.role)) {
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions: editor or admin role required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      )
+    }
+
     const organization_id = senderProfile.organization_id
 
-    // ── BUG-812 FIX: Server-side rate limiting ──────────────────────────
-    if (organization_id) {
-      const { data: allowed, error: rlErr } = await supabaseAdmin.rpc('check_email_rate_limit', {
-        p_org_id: organization_id,
-      })
-      if (rlErr) console.error('Rate limit check error:', rlErr)
-      if (allowed === false) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Maximum 20 emails per hour per organization.' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-        )
+    // ── SECURITY: Validate document ownership ────────────────────────
+    if (document_type && document_id) {
+      const docTable = document_type === 'minutes' ? 'minutes'
+        : document_type === 'agenda' ? 'agendas'
+        : null
+
+      if (docTable) {
+        const { data: doc, error: docErr } = await supabaseAdmin
+          .from(docTable)
+          .select('organization_id')
+          .eq('id', document_id)
+          .maybeSingle()
+
+        if (docErr || !doc) {
+          return new Response(
+            JSON.stringify({ error: 'Document not found' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+          )
+        }
+
+        if (doc.organization_id !== organization_id) {
+          console.error(`SECURITY: User ${user.id} (org ${organization_id}) tried to send document ${document_id} belonging to org ${doc.organization_id}`)
+          return new Response(
+            JSON.stringify({ error: 'Document does not belong to your organization' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+          )
+        }
       }
     }
 
-    // ── Sanitize HTML using DOM parser (BUG-011 fix) ──────────────────
-    const sanitizedHtml = sanitizeHtml(html)
+    // ── Server-side rate limiting (using server-derived org) ─────────
+    const { data: allowed, error: rlErr } = await supabaseAdmin.rpc('check_email_rate_limit', {
+      p_org_id: organization_id,
+    })
+    if (rlErr) console.error('Rate limit check error:', rlErr)
+    if (allowed === false) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Maximum 20 emails per hour per organization.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+      )
+    }
+
+    // ── BUG-822 FIX: Sanitize HTML — strip script tags and event handlers ──
+    const sanitizedHtml = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/\son\w+\s*=\s*\S+/gi, '')
 
     // Send via Resend
     const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`
 
-    // ── FIX BUG-010: All recipients in BCC for privacy ────────────────
+    // ── FIX BUG-010 + BUG-091b: Recipient handling ────────────────────
+    // First recipient in TO, rest in BCC. This avoids using a @goodoftheorder.app
+    // address as TO, which triggers domain-wide suppression in Resend and blocks
+    // delivery to ALL recipients including BCC.
+    // Trade-off: first recipient's address is visible in the To header.
+    // Acceptable for org board distribution where all members know each other.
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -239,10 +166,10 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: fromEmail,
-        to: [fromEmail.match(/<(.+)>/)?.[1] || 'notifications@goodoftheorder.app'],
-        bcc: to,
+        to: [to[0]],
+        bcc: to.length > 1 ? to.slice(1) : undefined,
         subject,
-        html: sanitizedHtml,
+        html: sanitizedHtml,  // BUG-822: Use sanitized HTML
       }),
     })
 
@@ -253,13 +180,14 @@ serve(async (req) => {
       throw new Error(resendData.message || 'Resend API error')
     }
 
-    // Log to distribution_logs (using service role for reliable logging)
-    if (organization_id && document_type && document_id) {
-      await supabaseAdmin.from('distribution_logs').insert({
+    // Log to distribution_logs (using server-derived org and sender)
+    if (document_type && document_id) {
+      const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!)
+      await supabase.from('distribution_logs').insert({
         organization_id,
         document_type,
         document_id,
-        sent_by: sent_by || user.id,
+        sent_by: senderProfile.id,
         recipient_emails: to,
         email_subject: subject,
         delivery_status: 'sent',

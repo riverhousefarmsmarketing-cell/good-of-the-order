@@ -1,21 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Playwright E2E test configuration for GoodOfTheOrder.
- *
- * Prerequisites:
- *   1. Copy .env.example → .env.local with real Supabase credentials
- *   2. Create test user: TEST_USER_EMAIL / TEST_USER_PASSWORD in Supabase
- *   3. npm run dev (runs on :5173)
- *
- * Run:
- *   npx playwright test              # all tests
- *   npx playwright test --ui         # interactive UI
- *   npx playwright test auth.spec    # single file
- */
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: false, // sequential — tests share auth state
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
@@ -34,26 +21,26 @@ export default defineConfig({
       name: 'auth-setup',
       testMatch: /auth\.setup\.ts/,
     },
-    // Main tests — use saved auth state
+    // Authenticated tests — excludes public.spec
     {
       name: 'e2e',
+      testMatch: /^(?!.*(public|auth-security)\.spec).*\.spec\.ts$/,
       dependencies: ['auth-setup'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: './tests/e2e/.auth/user.json',
       },
     },
-    // Tests that require no auth (login, signup, public pages)
+    // Public tests — no auth state
     {
       name: 'public',
-      testMatch: /public\.spec/,
+      testMatch: /(public|auth-security)\.spec/,
       use: {
         ...devices['Desktop Chrome'],
       },
     },
   ],
 
-  /* Start dev server automatically if not running */
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',

@@ -132,7 +132,7 @@ export function useMembers({ autoFetch = true } = {}) {
             <p style="color:#94a3b8;font-size:12px;text-align:center">If the button doesn't work, copy this link: ${inviteUrl}</p>
           </div>`,
           from_name: orgName,
-          organization_id: profile.organization_id,
+          // organization_id derived server-side from JWT
         },
       });
       if (fnError) console.error('Invite email error:', fnError);
