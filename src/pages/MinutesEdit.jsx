@@ -35,13 +35,13 @@ export default function MinutesEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { fetchFullMinutes, saveMinutes, deleteMinutes } = useMinutes();
+  const { fetchFullMinutes, saveMinutes, deleteMinutes, createRevision } = useMinutes();
   const { members } = useMembers();
   const { organization } = useOrganization();
   const isEditor = profile?.role === 'admin' || profile?.role === 'editor';
   const [activeTab, setActiveTab] = useState('meeting-info');
   const [draft, setDraft] = useState(null);
-  const isLocked = draft?.status === 'approved'; // BUG-030: Lock all fields when finalized
+  const isLocked = draft?.status === 'approved' || draft?.status === 'revised'; // Lock finalized and superseded minutes
   const [saving, setSaving] = useState(false);
   const savingRef = React.useRef(false); // BUG-021: synchronous guard against double-submit
   const [errors, setErrors] = useState([]);
@@ -236,18 +236,17 @@ const { toast } = useToast();
     navigate('/minutes');
   };
 
-  // BUG-031: Revert finalized minutes back to draft
-  const handleRevertToDraft = async () => {
+  // Formal revision: clone approved minutes into a new draft revision
+  const handleCreateRevision = async () => {
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     try {
-      const result = await saveMinutes({ ...draft, status: 'draft' });
-      setDraft(prev => ({ ...prev, status: 'draft', _loaded_at: result.updated_at }));
-      toast.success('Reverted to draft — you can now edit.');
-      setIsDirty(false);
+      const result = await createRevision(draft.id);
+      toast.success('Revision created — redirecting to the new draft.');
+      navigate(`/minutes/${result.id}`, { replace: true });
     } catch (err) {
-      toast.error(`Revert failed: ${err.message || 'Please try again.'}`);
+      toast.error(`Revision failed: ${err.message || 'Please try again.'}`);
     } finally { setSaving(false); savingRef.current = false; }
   };
 
@@ -296,9 +295,9 @@ const { toast } = useToast();
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: '#1e293b' }}>{isNew ? 'New Meeting Minutes' : 'Edit Minutes'}</h1>
           <span style={{
             padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-            background: draft.status === 'approved' ? '#dcfce7' : '#fef3c7',
-            color: draft.status === 'approved' ? '#166534' : '#92400e',
-          }}>{draft.status}</span>
+            background: draft.status === 'approved' ? '#dcfce7' : draft.status === 'revised' ? '#e2e8f0' : '#fef3c7',
+            color: draft.status === 'approved' ? '#166534' : draft.status === 'revised' ? '#475569' : '#92400e',
+          }}>{draft.status === 'revised' ? 'revised (superseded)' : draft.status}{draft.revision_number > 0 && draft.status !== 'revised' ? ` (rev. ${draft.revision_number})` : ''}</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {isEditor ? (<>
@@ -313,9 +312,9 @@ const { toast } = useToast();
           )}
           {isLocked && !isNew && (
             <>
-              <button onClick={handleRevertToDraft} disabled={saving} style={{ padding: '8px 18px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>↩ Revert to Draft</button>
+              {draft.status === 'approved' && <button onClick={handleCreateRevision} disabled={saving} style={{ padding: '8px 18px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📝 Create Revision</button>}
               <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
-              <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>
+              {draft.status === 'approved' && <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>}
             </>
           )}
           </>) : (
@@ -334,7 +333,23 @@ const { toast } = useToast();
       {isLocked && (
         <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '10px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#166534', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>🔒</span>
-          <span>These minutes are <strong>finalized</strong>. To make changes, click <strong>Revert to Draft</strong>.</span>
+          <span>These minutes are <strong>finalized</strong>. To make changes, click <strong>Create Revision</strong> — a new draft will be created and this version will be preserved as the official record.</span>
+        </div>
+      )}
+
+      {/* Revision info: shown when this is a revision draft */}
+      {draft.revision_of && draft.status === 'draft' && (
+        <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '10px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, color: '#1e40af', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📝</span>
+          <span>This is <strong>Revision {draft.revision_number}</strong> of the original minutes. Edit and finalize to issue the revised version.</span>
+        </div>
+      )}
+
+      {/* Superseded banner: shown when this record has been revised */}
+      {draft.status === 'revised' && (
+        <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '10px 16px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, color: '#92400e', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📋</span>
+          <span>These minutes have been <strong>superseded by a revision</strong>. This is the original record, preserved for audit purposes.</span>
         </div>
       )}
 

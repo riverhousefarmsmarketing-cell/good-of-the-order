@@ -63,6 +63,7 @@ export function useMinutes({ autoFetch = true } = {}) {
       .select(`
         id, meeting_type, subcommittee_id, meeting_date, status,
         facilitator_id, recorder_id, quorum, created_at,
+        revision_of, revision_number,
         subcommittee:subcommittees(name)
       `)
       .order('meeting_date', { ascending: false });
@@ -195,6 +196,8 @@ export function useMinutes({ autoFetch = true } = {}) {
       good_of_the_order: mainData.good_of_the_order || null,
       adjournment_motion: mainData.adjournment_motion || null,
       adjournment_no_motion: mainData.adjournment_no_motion ?? true,
+      revision_of: mainData.revision_of || null,
+      revision_number: mainData.revision_number || 0,
     };
 
     const p_attendance = attendance.map(a => ({
@@ -250,7 +253,7 @@ const minutesId = rpcResult.id;
     // BUG-702 FIX: Fetch only the saved record and merge into list (not full re-fetch)
     const { data: updated } = await supabase
       .from('minutes')
-      .select('id, meeting_type, subcommittee_id, meeting_date, status, facilitator_id, recorder_id, quorum, created_at, subcommittee:subcommittees(name)')
+      .select('id, meeting_type, subcommittee_id, meeting_date, status, facilitator_id, recorder_id, quorum, created_at, revision_of, revision_number, subcommittee:subcommittees(name)')
       .eq('id', minutesId)
       .single();
 
@@ -273,12 +276,93 @@ const minutesId = rpcResult.id;
     setMinutesList(prev => prev.filter(m => m.id !== id));
   }, []);
 
+  // Create a formal revision of approved minutes
+  // Clones the original into a new draft, links it via revision_of,
+  // and marks the original as 'revised' (superseded)
+  const createRevision = useCallback(async (originalId) => {
+    await checkWritePermission();
+
+    // Fetch the full original minutes with all child data
+    const original = await fetchFullMinutes(originalId);
+    if (!original) throw new Error('Original minutes not found');
+    if (original.status !== 'approved') throw new Error('Can only revise approved minutes');
+
+    // Determine revision number
+    const { count } = await supabase
+      .from('minutes')
+      .select('id', { count: 'exact', head: true })
+      .eq('revision_of', originalId);
+    const revisionNumber = (count || 0) + 1;
+
+    // Clone into a new draft with revision link
+    const revisionData = {
+      ...original,
+      id: null, // force INSERT
+      status: 'draft',
+      revision_of: originalId,
+      revision_number: revisionNumber,
+      _loaded_at: null,
+      approved_by: null,
+      approved_at: null,
+    };
+
+    const result = await saveMinutes(revisionData);
+
+    // Mark the original as 'revised' (superseded)
+    await supabase
+      .from('minutes')
+      .update({ status: 'revised' })
+      .eq('id', originalId);
+
+    // Update local list to reflect the status change
+    setMinutesList(prev => prev.map(m =>
+      m.id === originalId ? { ...m, status: 'revised' } : m
+    ));
+
+    return result;
+  }, [fetchFullMinutes, saveMinutes]);
+
+  // Deep content search across minutes fields and child tables
+  // Returns matching minutes IDs for client-side filtering
+  const searchMinutes = useCallback(async (query) => {
+    if (!query || !query.trim()) return null; // null = no filter
+    const q = `%${query.trim()}%`;
+
+    // Search across main minutes text fields
+    const { data: mainHits } = await supabase
+      .from('minutes')
+      .select('id')
+      .or(`correspondence.ilike.${q},presidents_report.ilike.${q},good_of_the_order.ilike.${q},guests.ilike.${q},agenda_changes.ilike.${q},member_services_report.ilike.${q},state_board_report.ilike.${q},membership_committee.ilike.${q},new_members.ilike.${q},pac_committee.ilike.${q},nomination_committee.ilike.${q},policy_committee.ilike.${q}`);
+
+    // Search business items
+    const { data: bizHits } = await supabase
+      .from('business_items')
+      .select('minutes_id')
+      .or(`title.ilike.${q},discussion.ilike.${q}`);
+
+    // Search action items
+    const { data: actionHits } = await supabase
+      .from('action_items')
+      .select('minutes_id')
+      .or(`task.ilike.${q},assignee_name.ilike.${q}`);
+
+    // Combine all matching IDs
+    const ids = new Set();
+    (mainHits || []).forEach(h => ids.add(h.id));
+    (bizHits || []).forEach(h => ids.add(h.minutes_id));
+    (actionHits || []).forEach(h => ids.add(h.minutes_id));
+
+    return ids;
+  }, []);
+
   return {
     minutesList,
     loading,
     fetchFullMinutes,
     saveMinutes,
     deleteMinutes,
+    createRevision,
+    searchMinutes,
     refresh: fetchMinutesList,
   };
 }

@@ -112,6 +112,82 @@ export function useAgendas({ autoFetch = true } = {}) {
     ];
   }, []);
 
+  // Fetch suggested agenda items from the most recent finalized minutes of the same type
+  const fetchSuggestedItems = useCallback(async (meetingType, subcommitteeId = null) => {
+    // Find the most recent approved/revised minutes of this meeting type
+    let query = supabase
+      .from('minutes')
+      .select('id, meeting_date, meeting_type')
+      .in('status', ['approved', 'revised'])
+      .eq('meeting_type', meetingType)
+      .order('meeting_date', { ascending: false })
+      .limit(1);
+
+    if (meetingType === 'SUBCOMMITTEE' && subcommitteeId) {
+      query = query.eq('subcommittee_id', subcommitteeId);
+    }
+
+    const { data: recentMinutes } = await query;
+    if (!recentMinutes || recentMinutes.length === 0) return [];
+
+    const minutesId = recentMinutes[0].id;
+    const suggestions = [];
+
+    // 1. Tabled motions from business items (decision contains "tabled")
+    const { data: bizItems } = await supabase
+      .from('business_items')
+      .select('title, discussion, motion, item_type')
+      .eq('minutes_id', minutesId);
+
+    (bizItems || []).forEach(item => {
+      const decision = item.motion?.decision?.toLowerCase() || '';
+      if (decision.includes('tabled') || decision.includes('postponed') || decision.includes('deferred')) {
+        suggestions.push({
+          title: item.title,
+          description: `Tabled from previous meeting: ${item.discussion || item.motion?.text || ''}`.slice(0, 200),
+          is_inherited: true,
+          source_minutes_id: minutesId,
+          _reason: 'tabled',
+        });
+      }
+    });
+
+    // 2. Pending action items
+    const { data: actionItems } = await supabase
+      .from('action_items')
+      .select('task, assignee_name, status')
+      .eq('minutes_id', minutesId)
+      .eq('status', 'pending');
+
+    (actionItems || []).forEach(item => {
+      suggestions.push({
+        title: `Follow up: ${item.task}`,
+        description: item.assignee_name ? `Assigned to: ${item.assignee_name}` : '',
+        is_inherited: true,
+        source_minutes_id: minutesId,
+        _reason: 'pending_action',
+      });
+    });
+
+    // 3. New business items with no clear resolution may need follow-up
+    (bizItems || []).filter(b => b.item_type === 'new').forEach(item => {
+      const decision = item.motion?.decision?.toLowerCase() || '';
+      if (decision.includes('tabled') || decision.includes('postponed') || decision.includes('deferred')) return;
+      if (decision.includes('passed') || decision.includes('approved') || decision.includes('failed') || decision.includes('denied')) return;
+      if (!decision) {
+        suggestions.push({
+          title: item.title,
+          description: `From previous meeting — may need follow-up`,
+          is_inherited: true,
+          source_minutes_id: minutesId,
+          _reason: 'unresolved_new_business',
+        });
+      }
+    });
+
+    return suggestions;
+  }, []);
+
   return {
     agendasList,
     loading,
@@ -119,6 +195,7 @@ export function useAgendas({ autoFetch = true } = {}) {
     saveAgenda,
     deleteAgenda,
     getStandardItems,
+    fetchSuggestedItems,
     refresh: fetchAgendasList,
   };
 }

@@ -18,7 +18,7 @@ function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8);
 export default function AgendaEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems } = useAgendas();
+  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems, fetchSuggestedItems } = useAgendas();
   const { organization } = useOrganization();
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
@@ -36,6 +36,8 @@ export default function AgendaEditPage() {
 
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
 const isNew = !id;
 
@@ -45,14 +47,31 @@ const isNew = !id;
         meeting_type: 'BOARD', meeting_date: '', meeting_time: '', location: '', status: 'draft',
         items: getStandardItems().map((item, i) => ({ ...item, _id: genTempId(), sort_order: i + 1 })),
       });
+      // Fetch suggestions from recent minutes
+      setSuggestionsLoading(true);
+      fetchSuggestedItems('BOARD').then(items => {
+        setSuggestions(items);
+        setSuggestionsLoading(false);
+      }).catch(() => setSuggestionsLoading(false));
     } else {
       fetchFullAgenda(id).then(data => { if (!data) navigate('/agendas'); else setDraft(data); });
     }
-  }, [id, isNew, fetchFullAgenda, navigate, getStandardItems]);
+  }, [id, isNew, fetchFullAgenda, navigate, getStandardItems, fetchSuggestedItems]);
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
-  const u = (field, value) => { setIsDirty(true); setDraft(prev => ({ ...prev, [field]: value })); };
+  const u = (field, value) => {
+    setIsDirty(true);
+    setDraft(prev => ({ ...prev, [field]: value }));
+    // Refresh suggestions when meeting type changes
+    if (field === 'meeting_type' && isNew) {
+      setSuggestionsLoading(true);
+      fetchSuggestedItems(value).then(items => {
+        setSuggestions(items);
+        setSuggestionsLoading(false);
+      }).catch(() => setSuggestionsLoading(false));
+    }
+  };
 
   const handleSave = async (status) => {
     setSaving(true);
@@ -77,6 +96,28 @@ const isNew = !id;
   const addItem = () => {
     const maxOrder = Math.max(0, ...draft.items.map(i => i.sort_order || 0));
     u('items', [...draft.items, { _id: genTempId(), title: '', description: '', is_standard: false, sort_order: maxOrder + 1 }]);
+  };
+
+  const acceptSuggestion = (suggestion) => {
+    // Insert before the last 2 standard items (Good of the Order, Adjournment)
+    const items = [...draft.items];
+    const insertIdx = Math.max(0, items.length - 2);
+    const maxOrder = Math.max(0, ...items.map(i => i.sort_order || 0));
+    const newItem = {
+      _id: genTempId(),
+      title: suggestion.title,
+      description: suggestion.description || '',
+      is_standard: false,
+      is_inherited: true,
+      source_minutes_id: suggestion.source_minutes_id,
+      sort_order: maxOrder + 1,
+    };
+    items.splice(insertIdx, 0, newItem);
+    items.forEach((item, i) => item.sort_order = i + 1);
+    u('items', items);
+    // Remove from suggestions
+    setSuggestions(prev => prev.filter(s => s !== suggestion));
+    toast.success(`Added "${suggestion.title}" to agenda.`);
   };
 
   const updateItem = (idx, updates) => {
@@ -159,6 +200,29 @@ const isNew = !id;
             </div>
           ))}
         </div>
+
+        {/* Suggested items from recent minutes */}
+        {isNew && suggestions.length > 0 && (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 24, marginTop: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#92400e', margin: '0 0 8px' }}>Suggested Items from Recent Minutes</h3>
+            <p style={{ fontSize: 13, color: '#78716c', margin: '0 0 16px' }}>These items from your most recent meeting may need follow-up. Click to add them to this agenda.</p>
+            {suggestions.map((s, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8, padding: 10, background: 'white', border: '1px solid #fde68a', borderRadius: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: '#1e293b' }}>{s.title}</div>
+                  {s.description && <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>{s.description}</div>}
+                  <span style={{ fontSize: 10, padding: '2px 8px', background: s._reason === 'tabled' ? '#fef2f2' : s._reason === 'pending_action' ? '#eff6ff' : '#f1f5f9', color: s._reason === 'tabled' ? '#dc2626' : s._reason === 'pending_action' ? '#1e40af' : '#64748b', borderRadius: 10, marginTop: 4, display: 'inline-block' }}>
+                    {s._reason === 'tabled' ? 'Tabled Motion' : s._reason === 'pending_action' ? 'Pending Action Item' : 'Unresolved Business'}
+                  </span>
+                </div>
+                <button onClick={() => acceptSuggestion(s)} style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {isNew && suggestionsLoading && (
+          <div style={{ marginTop: 16, padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Checking recent minutes for suggested items...</div>
+        )}
       </div>
 <ConfirmDialog
         open={showDeleteConfirm}
