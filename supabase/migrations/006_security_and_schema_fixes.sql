@@ -1,0 +1,19 @@
+-- Migration: 006_security_and_schema_fixes
+-- Date: 2026-02-07
+-- Status: APPLIED VIA SQL EDITOR — NOT COMMITTED AT THE TIME
+--
+-- This migration was applied directly to production via Supabase SQL Editor
+-- during Session C (Feb 7, 2026) but the file was not committed to the repo.
+--
+-- Contents (all superseded by later migrations):
+--   1. Fixed distribution_contacts RLS from USING(true) to org-scoped (BUG-001)
+--      → Superseded by 008_bugfix_sweep.sql
+--   2. Fixed invitations RLS from public lookup to org-scoped (BUG-009)
+--      → Superseded by 008_bugfix_sweep.sql
+--   3. Added 'accounts' JSONB column to minutes table (BUG-003)
+--      → Covered in 008_bugfix_sweep.sql
+--   4. Added 'logo_position' TEXT column to organizations table (BUG-004)
+--      → Covered in 008_bugfix_sweep.sql
+--
+-- This placeholder exists to document the gap in the migration sequence.
+-- No SQL needs to run — all changes are already applied and covered by later files.
