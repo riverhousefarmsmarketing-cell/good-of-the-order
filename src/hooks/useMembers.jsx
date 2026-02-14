@@ -106,7 +106,7 @@ export function useMembers({ autoFetch = true } = {}) {
 
     if (inviteError) throw inviteError;
 
-    const inviteUrl = `${window.location.origin}/signup?invite=${data.id}`;
+    const inviteUrl = `${window.location.origin}/signup?invite=${data.token}`;
     const orgName = org?.name || 'your organization';
     const inviterName = profile?.full_name || 'A board member';
 
