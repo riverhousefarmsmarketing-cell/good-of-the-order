@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useBlocker } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { useAuth } from '../hooks/useAuth';
@@ -33,6 +33,9 @@ export default function AgendaEditPage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
+
+  // BUG-036: Block React Router navigation when dirty
+  const blocker = useBlocker(isDirty);
 
 const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -167,6 +170,17 @@ const isNew = !id;
         title="Delete Agenda"
         message="This will permanently delete this agenda. This action cannot be undone."
         confirmLabel="Delete"
+        variant="danger"
+      />
+
+      {/* BUG-036: Unsaved changes navigation blocker */}
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        onClose={() => blocker.reset()}
+        onConfirm={() => blocker.proceed()}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Are you sure you want to leave? Your changes will be lost."
+        confirmLabel="Leave"
         variant="danger"
       />
          
