@@ -49,13 +49,9 @@ export function useAgendas({ autoFetch = true } = {}) {
 
     const p_agenda = {
       id: mainData.id || null,
-      // BUG-060 FIX: Disable optimistic locking temporarily.
-      // The _loaded_at timestamp was causing "Conflict: agenda updated by someone else"
-      // errors in a retry loop (90+ failures/second), exhausting Supabase resources.
-      // Root cause: timestamp precision mismatch between JS Date.toISOString() and
-      // Postgres timestamptz. Setting to null uses the non-locking UPDATE path.
-      // TODO: Re-enable after fixing timestamp format to match DB precision.
-      _loaded_at: null,
+      // CR-011 FIX: Pass _loaded_at through for optimistic locking
+      // (was hardcoded to null, bypassing conflict detection)
+      _loaded_at: mainData._loaded_at || null,
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       meeting_date: mainData.meeting_date || null,
@@ -73,15 +69,13 @@ export function useAgendas({ autoFetch = true } = {}) {
       source_minutes_id: item.source_minutes_id || null,
     }));
 
-    console.log('saveAgenda: about to call rpcFetch', p_agenda.id);
+    // CR-021 FIX: Removed console.log statements (were leaking internal state in production)
 
     // Use raw fetch instead of supabase.rpc() to avoid client hanging bug
     const { data: result, error } = await rpcFetch('save_agenda_atomic', {
       p_agenda,
       p_items,
     });
-
-    console.log('saveAgenda: rpcFetch returned', result, error);
 
     if (error) throw new Error(error.message || JSON.stringify(error));
     return result.id;
