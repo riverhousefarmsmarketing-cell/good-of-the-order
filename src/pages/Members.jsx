@@ -17,13 +17,13 @@ const BOARD_POSITIONS = [
 
 export default function MembersPage() {
   const { isAdmin, profile } = useAuth();
-  const { members, invitations, loading, updateMember, deactivateMember, reactivateMember, sendInvitation, cancelInvitation } = useMembers();
+  const { members, invitations, loading, createMember, updateMember, deactivateMember, reactivateMember, sendInvitation, cancelInvitation } = useMembers();
   const [showInvite, setShowInvite] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'editor', boardPosition: '' });
-  const [inviteError, setInviteError] = useState(null);
-  const [inviteSending, setInviteSending] = useState(false);
+  const [memberForm, setMemberForm] = useState({ fullName: '', email: '', phone: '', boardPosition: '' });
+  const [formError, setFormError] = useState(null);
+  const [formSaving, setFormSaving] = useState(false);
 const { toast } = useToast();
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
@@ -32,23 +32,24 @@ const { toast } = useToast();
 
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
 
-  const handleInvite = async () => {
-    if (!inviteForm.email) return;
-    setInviteError(null);
-    setInviteSending(true);
+  const handleAddMember = async () => {
+    if (!memberForm.fullName) return;
+    setFormError(null);
+    setFormSaving(true);
     try {
-      const result = await sendInvitation(inviteForm);
-      setInviteForm({ email: '', role: 'editor', boardPosition: '' });
-      if (result?.inviteUrl) {
-        setLastInviteUrl(result.inviteUrl);
-      } else {
-        setShowInvite(false);
-      }
-      toast.success('Invitation created');
+      await createMember({
+        fullName: memberForm.fullName,
+        email: memberForm.email,
+        phone: memberForm.phone,
+        boardPosition: memberForm.boardPosition,
+      });
+      setMemberForm({ fullName: '', email: '', phone: '', boardPosition: '' });
+      setShowInvite(false);
+      toast.success(`${memberForm.fullName} added to the directory`);
     } catch (err) {
-      setInviteError(err.message);
+      setFormError(err.message);
     } finally {
-      setInviteSending(false);
+      setFormSaving(false);
     }
   };
 
@@ -86,7 +87,7 @@ const { toast } = useToast();
               border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 14, cursor: 'pointer',
             }}
           >
-            + Invite Member
+            + Add Member
           </button>
         )}
       </div>
@@ -106,9 +107,9 @@ const { toast } = useToast();
               padding: '10px 0', borderBottom: '1px solid #fde68a',
             }}>
               <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 500, color: '#1e293b' }}>{inv.email}</span>
+                <span style={{ fontWeight: 500, color: '#1e293b' }}>{inv.full_name || inv.email}</span>
                 <span style={{ marginLeft: 12, fontSize: 12, color: '#64748b' }}>
-                  {inv.role} {inv.board_position ? `- ${inv.board_position}` : ''}
+                  {inv.full_name ? inv.email + ' · ' : ''}{inv.role} {inv.board_position ? `- ${inv.board_position}` : ''}
                 </span>
               </div>
               <span style={{ fontSize: 12, color: '#94a3b8' }}>
@@ -354,28 +355,45 @@ const { toast } = useToast();
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1e293b', margin: '0 0 20px' }}>
-              Invite Member
+              Add Member
             </h2>
 
-            {inviteError && (
+            {formError && (
               <div style={{
                 padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
                 borderRadius: 6, color: '#dc2626', fontSize: 13, marginBottom: 16,
               }}>
-                {inviteError}
+                {formError}
               </div>
             )}
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
-                Email Address
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={memberForm.fullName}
+                onChange={(e) => setMemberForm({ ...memberForm, fullName: e.target.value })}
+                placeholder="Jane Smith"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Escape') setShowInvite(false); }}
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                Email Address <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
               </label>
               <input
                 type="email"
-                value={inviteForm.email}
-                onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                value={memberForm.email}
+                onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })}
                 placeholder="member@example.com"
-                autoFocus
                 onKeyDown={(e) => { if (e.key === 'Escape') setShowInvite(false); }}
                 style={{
                   width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
@@ -387,31 +405,26 @@ const { toast } = useToast();
             <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
-                  Role
+                  Phone <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
                 </label>
-                <select
-                  value={inviteForm.role}
-                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                <input
+                  type="tel"
+                  value={memberForm.phone}
+                  onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })}
+                  placeholder="(555) 123-4567"
                   style={{
                     width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
-                    borderRadius: 6, fontSize: 14,
+                    borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
                   }}
-                >
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                  {ROLES.find((r) => r.value === inviteForm.role)?.desc}
-                </div>
+                />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
                   Board Position
                 </label>
                 <select
-                  value={inviteForm.boardPosition}
-                  onChange={(e) => setInviteForm({ ...inviteForm, boardPosition: e.target.value })}
+                  value={memberForm.boardPosition}
+                  onChange={(e) => setMemberForm({ ...memberForm, boardPosition: e.target.value })}
                   style={{
                     width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
                     borderRadius: 6, fontSize: 14,
@@ -429,12 +442,12 @@ const { toast } = useToast();
               padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0',
               borderRadius: 6, marginBottom: 20, fontSize: 13, color: '#64748b',
             }}>
-              The invited person will need to create an account. Their invitation link will include a token that automatically adds them to your organization.
+              This member will appear in your attendance lists and directory right away. They don't need an email or account to be listed as a board member.
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button
-                onClick={() => setShowInvite(false)}
+                onClick={() => { setShowInvite(false); setFormError(null); setLastInviteUrl(null); }}
                 style={{
                   padding: '10px 20px', background: 'white', border: '1px solid #d1d5db',
                   borderRadius: 6, fontSize: 14, cursor: 'pointer',
@@ -443,28 +456,18 @@ const { toast } = useToast();
                 Cancel
               </button>
               <button
-                onClick={handleInvite}
-                disabled={!inviteForm.email || inviteSending}
+                onClick={handleAddMember}
+                disabled={!memberForm.fullName || formSaving}
                 style={{
                   padding: '10px 20px', background: '#1e293b', color: 'white',
                   border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600,
-                  cursor: inviteSending ? 'wait' : 'pointer',
-                  opacity: !inviteForm.email || inviteSending ? 0.6 : 1,
+                  cursor: formSaving ? 'wait' : 'pointer',
+                  opacity: !memberForm.fullName || formSaving ? 0.6 : 1,
                 }}
               >
-                {inviteSending ? 'Sending...' : 'Send Invitation'}
+                {formSaving ? 'Adding...' : 'Add Member'}
               </button>
             </div>
-            {lastInviteUrl && (
-              <div style={{ marginTop: 16, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#166534', marginBottom: 6 }}>✓ Invitation created! Share this link:</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="text" readOnly value={lastInviteUrl} style={{ flex: 1, padding: 8, border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, background: 'white' }} />
-                  <button onClick={() => { navigator.clipboard.writeText(lastInviteUrl); toast.success('Link copied!'); }} style={{ padding: '8px 14px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
-                </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>Email notification coming soon. For now, share this link manually.</div>
-              </div>
-            )}
           </div>
         </div>
       )}

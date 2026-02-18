@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 /**
+ * useMembers hook — fetches from the `members` table (board directory),
+ * NOT from `profiles` (auth accounts). Members exist independently of
+ * user accounts and can be added by name alone.
+ *
  * BUG-061 FIX: Added autoFetch option + fetch guard.
- * Pages that only need member data for dropdowns (like MinutesEdit attendance)
- * can pass { autoFetch: false } and call refresh() manually when needed.
  */
 export function useMembers({ autoFetch = true } = {}) {
   const [members, setMembers] = useState([]);
@@ -15,9 +17,8 @@ export function useMembers({ autoFetch = true } = {}) {
 
   const fetchMembers = useCallback(async () => {
     try {
-      // BUG-029: RLS handles org isolation, but explicit filter is defense-in-depth
       const { data, error: fetchError } = await supabase
-        .from('profiles')
+        .from('members')
         .select('*')
         .order('board_position_order', { ascending: true, nullsFirst: false })
         .order('full_name');
@@ -58,10 +59,36 @@ export function useMembers({ autoFetch = true } = {}) {
     });
   }, [autoFetch, fetchMembers, fetchInvitations]);
 
+  // Create a new directory member (no auth account needed)
+  const createMember = useCallback(async ({ fullName, email, phone, role, boardPosition }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single();
+
+    const { data, error: insertError } = await supabase
+      .from('members')
+      .insert({
+        organization_id: profile.organization_id,
+        full_name: fullName,
+        email: email || null,
+        phone: phone || null,
+        board_position: boardPosition || null,
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+    await fetchMembers();
+    return data;
+  }, [fetchMembers]);
+
   const updateMember = useCallback(async (id, updates) => {
     const { error: updateError } = await supabase
-      .from('profiles')
-      .update(updates)
+      .from('members')
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     if (updateError) throw updateError;
@@ -76,7 +103,7 @@ export function useMembers({ autoFetch = true } = {}) {
     await updateMember(id, { is_active: true });
   }, [updateMember]);
 
-  const sendInvitation = useCallback(async ({ email, role, boardPosition }) => {
+  const sendInvitation = useCallback(async ({ email, role, boardPosition, fullName }) => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data: { session } } = await supabase.auth.getSession();
     const { data: profile } = await supabase
@@ -97,6 +124,7 @@ export function useMembers({ autoFetch = true } = {}) {
       .insert({
         organization_id: profile.organization_id,
         email,
+        full_name: fullName || null,
         role: role || 'viewer',
         board_position: boardPosition || null,
         invited_by: user.id,
@@ -124,7 +152,7 @@ export function useMembers({ autoFetch = true } = {}) {
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:24px;margin:0 0 24px">
               <p style="margin:0 0 8px;font-size:14px"><strong>Role:</strong> ${role || 'viewer'}</p>
               ${boardPosition ? `<p style="margin:0 0 8px;font-size:14px"><strong>Position:</strong> ${boardPosition}</p>` : ''}
-              <p style="margin:0;font-size:14px">GoodOfTheOrder helps your board manage meeting minutes, agendas, and records — all in one place.</p>
+              <p style="margin:0;font-size:14px">GoodOfTheOrder helps your board manage meeting minutes, agendas, and records – all in one place.</p>
             </div>
             <div style="text-align:center;margin:0 0 32px">
               <a href="${inviteUrl}" style="display:inline-block;padding:14px 32px;background:#1e293b;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px">Accept Invitation</a>
@@ -132,12 +160,10 @@ export function useMembers({ autoFetch = true } = {}) {
             <p style="color:#94a3b8;font-size:12px;text-align:center">If the button doesn't work, copy this link: ${inviteUrl}</p>
           </div>`,
           from_name: orgName,
-          // organization_id derived server-side from JWT
         },
       });
       if (fnError) console.error('Invite email error:', fnError);
     } catch (emailErr) {
-      // Don't fail the invitation if email fails — URL is still available
       console.error('Invite email send failed:', emailErr);
     }
 
@@ -160,6 +186,7 @@ export function useMembers({ autoFetch = true } = {}) {
     invitations,
     loading,
     error,
+    createMember,
     updateMember,
     deactivateMember,
     reactivateMember,
