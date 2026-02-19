@@ -74,10 +74,6 @@ export default function SignupPage() {
     organizationType: '',
   });
 
-  if (!loading && user) {
-    return <Navigate to="/" replace />;
-  }
-
   const updateForm = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const autoSlug = (name) => {
@@ -132,6 +128,11 @@ export default function SignupPage() {
 
   const [slugAvailable, setSlugAvailable] = useState(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
+
+  // BUG-083 FIX: Navigate must be AFTER all hooks to avoid React error #300
+  if (!loading && user) {
+    return <Navigate to="/" replace />;
+  }
 
   const checkSlugAvailability = async (slug) => {
     if (!slug || slug.length < 3) { setSlugAvailable(null); return; }
