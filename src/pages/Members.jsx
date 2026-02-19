@@ -81,7 +81,11 @@ const { toast } = useToast();
         </div>
         {isAdmin && (
           <button
-            onClick={() => setShowInvite(true)}
+            onClick={() => {
+              setMemberForm({ fullName: '', email: '', phone: '', boardPosition: '' });
+              setFormError(null);
+              setShowInvite(true);
+            }}
             style={{
               padding: '10px 20px', background: '#1e293b', color: 'white',
               border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -345,7 +349,6 @@ const { toast } = useToast();
           onClick={() => setShowInvite(false)}
           onKeyDown={(e) => { if (e.key === 'Escape') setShowInvite(false); }}
           tabIndex={-1}
-          ref={(el) => el?.focus()}
         >
           <div
             style={{
