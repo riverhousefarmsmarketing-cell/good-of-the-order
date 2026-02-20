@@ -80,9 +80,11 @@ const isNew = !id;
     savingRef.current = true;
     setSaving(true);
     try {
-      const newId = await saveAgenda({ ...draft, status: status || draft.status });
+      // FIX: saveAgenda now returns {id, updated_at} - update _loaded_at to prevent conflict cascade
+      const result = await saveAgenda({ ...draft, status: status || draft.status });
+      const newId = result.id;
       const newStatus = status || draft.status;
-      setDraft(prev => ({ ...prev, id: newId || prev.id, status: newStatus }));
+      setDraft(prev => ({ ...prev, id: newId || prev.id, status: newStatus, _loaded_at: result.updated_at }));
       setIsDirty(false); // BUG-036: Clear dirty flag on success
       toast.success('Agenda saved.');
       if (isNew && newId) navigate('/agendas/' + newId, { replace: true });
