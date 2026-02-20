@@ -22,6 +22,7 @@ export default function MembersPage() {
   const [editingId, setEditingId] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
   const [memberForm, setMemberForm] = useState({ fullName: '', email: '', phone: '', boardPosition: '' });
+  const [sendInviteChecked, setSendInviteChecked] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formSaving, setFormSaving] = useState(false);
 const { toast } = useToast();
@@ -34,18 +35,47 @@ const { toast } = useToast();
 
   const handleAddMember = async () => {
     if (!memberForm.fullName) return;
+    if (sendInviteChecked && !memberForm.email) {
+      setFormError('Email is required to send a login invitation.');
+      return;
+    }
     setFormError(null);
     setFormSaving(true);
     try {
+      // Always create directory member
       await createMember({
         fullName: memberForm.fullName,
         email: memberForm.email,
         phone: memberForm.phone,
         boardPosition: memberForm.boardPosition,
       });
+
+      // Optionally send login invitation
+      if (sendInviteChecked && memberForm.email) {
+        try {
+          const result = await sendInvitation({
+            email: memberForm.email,
+            fullName: memberForm.fullName,
+            role: 'viewer',
+            boardPosition: memberForm.boardPosition,
+          });
+          if (result?.inviteUrl) {
+            setLastInviteUrl(result.inviteUrl);
+          }
+          toast.success(`${memberForm.fullName} added and invitation sent`);
+        } catch (invErr) {
+          // Member was added, but invite failed — warn, don't undo
+          console.error('Invitation send failed:', invErr);
+          toast.success(`${memberForm.fullName} added, but invitation email failed — you can resend later`);
+        }
+      } else {
+        toast.success(`${memberForm.fullName} added to the directory`);
+      }
+
+      const hadInviteUrl = sendInviteChecked && memberForm.email;
       setMemberForm({ fullName: '', email: '', phone: '', boardPosition: '' });
-      setShowInvite(false);
-      toast.success(`${memberForm.fullName} added to the directory`);
+      setSendInviteChecked(false);
+      if (!hadInviteUrl) setShowInvite(false);
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -84,6 +114,8 @@ const { toast } = useToast();
             onClick={() => {
               setMemberForm({ fullName: '', email: '', phone: '', boardPosition: '' });
               setFormError(null);
+              setSendInviteChecked(false);
+              setLastInviteUrl(null);
               setShowInvite(true);
             }}
             style={{
@@ -441,11 +473,37 @@ const { toast } = useToast();
               </div>
             </div>
 
+            {/* Invite checkbox — only when email is provided */}
+            {memberForm.email && (
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: 14, background: '#f0f9ff', border: '1px solid #bae6fd',
+                borderRadius: 6, marginBottom: 16, cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={sendInviteChecked}
+                  onChange={(e) => setSendInviteChecked(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>
+                    Send invitation to log in
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    They'll receive an email with a link to create their account and access your organization's records.
+                  </div>
+                </div>
+              </label>
+            )}
+
             <div style={{
               padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0',
               borderRadius: 6, marginBottom: 20, fontSize: 13, color: '#64748b',
             }}>
-              This member will appear in your attendance lists and directory right away. They don't need an email or account to be listed as a board member.
+              {sendInviteChecked && memberForm.email
+                ? 'This member will be added to your directory and receive an email invitation to log in.'
+                : 'This member will appear in your attendance lists and directory right away. No account or email needed.'}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
@@ -468,9 +526,19 @@ const { toast } = useToast();
                   opacity: !memberForm.fullName || formSaving ? 0.6 : 1,
                 }}
               >
-                {formSaving ? 'Adding...' : 'Add Member'}
+                {formSaving ? 'Adding...' : sendInviteChecked ? 'Add & Invite' : 'Add Member'}
               </button>
             </div>
+
+            {lastInviteUrl && (
+              <div style={{ marginTop: 16, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#166534', marginBottom: 6 }}>✓ Invitation sent! You can also share this link:</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="text" readOnly value={lastInviteUrl} style={{ flex: 1, padding: 8, border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, background: 'white' }} />
+                  <button onClick={() => { navigator.clipboard.writeText(lastInviteUrl); toast.success('Link copied!'); }} style={{ padding: '8px 14px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
