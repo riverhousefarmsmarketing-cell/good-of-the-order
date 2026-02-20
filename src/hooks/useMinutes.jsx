@@ -111,7 +111,7 @@ export function useMinutes({ autoFetch = true } = {}) {
 
     return {
       ...mins,
-      _loaded_at: new Date().toISOString(),
+      _loaded_at: mins.updated_at,
       attendance: att || [],
       businessItems: biz || [],
       actionItems: actions || [],
