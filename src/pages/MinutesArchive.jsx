@@ -18,6 +18,15 @@ const STATUS_COLORS = {
   revised: { bg: '#e2e8f0', color: '#475569' },
 };
 
+// Format: "Board Meeting — Feb 23, 2026" or "Subcommittee: Marketing — Feb 23, 2026"
+function buildTitle(m) {
+  const typeLabel = MEETING_TYPES.find(t => t.value === m.meeting_type)?.label || m.meeting_type;
+  if (m.meeting_type === 'SUBCOMMITTEE' && m.subcommittee?.name) {
+    return m.subcommittee.name;
+  }
+  return `${typeLabel} Meeting`;
+}
+
 export default function MinutesArchivePage() {
   const { minutesList, loading, deleteMinutes, searchMinutes } = useMinutes();
   const { isEditor } = useAuth();
@@ -26,7 +35,7 @@ export default function MinutesArchivePage() {
   const [deepSearchIds, setDeepSearchIds] = useState(null); // null = no deep filter active
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef(null);
-const { toast } = useToast();
+  const { toast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Debounced deep search — triggers 500ms after typing stops
@@ -63,11 +72,11 @@ const { toast } = useToast();
       return clientMatch || deepMatch;
     });
 
- const handleDelete = async () => {
+  const handleDelete = async () => {
     try { await deleteMinutes(deleteTarget); setDeleteTarget(null); } catch (err) { toast.error('Unable to delete minutes.'); setDeleteTarget(null); }
   };
 
-  const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading minutes...</div>;
 
@@ -119,23 +128,28 @@ const { toast } = useToast();
               display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
               borderBottom: '1px solid #f1f5f9', textDecoration: 'none', color: 'inherit',
             }}>
-              <div style={{ fontSize: 13, color: '#64748b', minWidth: 100 }}>{fmtDate(m.meeting_date)}</div>
               <span style={{
                 padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
                 background: m.meeting_type === 'BOARD' ? '#dbeafe' : m.meeting_type === 'SUBCOMMITTEE' ? '#f3e8ff' : '#fef3c7',
                 color: m.meeting_type === 'BOARD' ? '#1e40af' : m.meeting_type === 'SUBCOMMITTEE' ? '#7c3aed' : '#92400e',
-              }}>{m.meeting_type}</span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 500, fontSize: 14 }}>
-                  {MEETING_TYPES.find(t => t.value === m.meeting_type)?.label} Meeting
-                </span>
-                {m.subcommittee?.name && <span style={{ color: '#64748b', fontSize: 13 }}> — {m.subcommittee.name}</span>}
+                minWidth: 80, textAlign: 'center',
+              }}>{MEETING_TYPES.find(t => t.value === m.meeting_type)?.label || m.meeting_type}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>
+                  {buildTitle(m)}
+                </div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                  {fmtDate(m.meeting_date)}
+                  {m.revision_number > 0 && m.status !== 'revised' && (
+                    <span style={{ marginLeft: 8, color: '#94a3b8' }}>· Revision {m.revision_number}</span>
+                  )}
+                </div>
               </div>
               <span style={{
                 padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
                 ...(STATUS_COLORS[m.status] || STATUS_COLORS.draft),
-              }}>{m.status === 'approved' ? 'Approved' : m.status === 'review' ? 'In Review' : m.status === 'revised' ? 'Revised' : 'Draft'}{m.revision_number > 0 && m.status !== 'revised' ? ` (rev. ${m.revision_number})` : ''}</span>
-             {isEditor && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
+              }}>{m.status === 'approved' ? 'Approved' : m.status === 'review' ? 'In Review' : m.status === 'revised' ? 'Revised' : 'Draft'}</span>
+              {isEditor && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(m.id); }} style={{
                 padding: '4px 10px', background: '#fef2f2', border: '1px solid #fecaca',
                 borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#dc2626',
               }}>Delete</button>}
@@ -144,7 +158,7 @@ const { toast } = useToast();
           ))}
         </div>
       )}
-<ConfirmDialog
+      <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
