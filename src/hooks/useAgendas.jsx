@@ -106,6 +106,20 @@ export function useAgendas({ autoFetch = true } = {}) {
     ];
   }, []);
 
+  const getSubcommitteeItems = useCallback(() => {
+    return [
+      { title: 'Call to Order', description: '', is_standard: true },
+      { title: 'Roll Call', description: '', is_standard: true },
+      { title: 'Approval of Previous Meeting Minutes', description: '', is_standard: true },
+      { title: 'Old Business', description: '', is_standard: true },
+      { title: 'New Business', description: '', is_standard: true },
+      { title: 'Action Items Review', description: '', is_standard: true },
+      { title: 'Recommendations to Full Board', description: '', is_standard: true },
+      { title: 'Next Meeting Date', description: '', is_standard: true },
+      { title: 'Adjournment', description: '', is_standard: true },
+    ];
+  }, []);
+
   // Fetch suggested agenda items from the most recent finalized minutes of the same type
   const fetchSuggestedItems = useCallback(async (meetingType, subcommitteeId = null) => {
     // Find the most recent approved/revised minutes of this meeting type
@@ -189,6 +203,7 @@ export function useAgendas({ autoFetch = true } = {}) {
     saveAgenda,
     deleteAgenda,
     getStandardItems,
+    getSubcommitteeItems,
     fetchSuggestedItems,
     refresh: fetchAgendasList,
   };

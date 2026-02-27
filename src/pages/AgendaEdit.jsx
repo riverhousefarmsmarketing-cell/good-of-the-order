@@ -19,7 +19,7 @@ function genTempId() { return '_tmp_' + Math.random().toString(36).substr(2, 8);
 export default function AgendaEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems, fetchSuggestedItems } = useAgendas();
+  const { fetchFullAgenda, saveAgenda, deleteAgenda, getStandardItems, getSubcommitteeItems, fetchSuggestedItems } = useAgendas();
   const { organization } = useOrganization();
   const { isEditor } = useAuth();
   const [draft, setDraft] = useState(null);
@@ -68,19 +68,32 @@ const isNew = !id;
     } else {
       fetchFullAgenda(id).then(data => { if (!data) navigate('/agendas'); else setDraft(data); });
     }
-  }, [id, isNew, fetchFullAgenda, navigate, getStandardItems, fetchSuggestedItems]);
+  }, [id, isNew, fetchFullAgenda, navigate, getStandardItems, getSubcommitteeItems, fetchSuggestedItems]);
 
   if (!draft) return <div style={{ padding: 32, color: '#64748b' }}>Loading...</div>;
 
   const u = (field, value) => {
     setIsDirty(true);
     setDraft(prev => ({ ...prev, [field]: value }));
-    // Refresh suggestions when meeting type changes
+    // Refresh suggestions and swap standard items when meeting type changes
     if (field === 'meeting_type' && isNew) {
       // Clear subcommittee_id if switching away from SUBCOMMITTEE
       if (value !== 'SUBCOMMITTEE') {
         setDraft(prev => ({ ...prev, subcommittee_id: null }));
       }
+      // Swap standard agenda items based on meeting type
+      const newItems = value === 'SUBCOMMITTEE'
+        ? getSubcommitteeItems()
+        : getStandardItems();
+      setDraft(prev => {
+        // Keep any custom (non-standard) items the user already added
+        const customItems = prev.items.filter(item => !item.is_standard);
+        const allItems = [
+          ...newItems.map((item, i) => ({ ...item, _id: genTempId(), sort_order: i + 1 })),
+          ...customItems.map((item, i) => ({ ...item, sort_order: newItems.length + i + 1 })),
+        ];
+        return { ...prev, items: allItems };
+      });
       setSuggestionsLoading(true);
       fetchSuggestedItems(value).then(items => {
         setSuggestions(items);
