@@ -8,6 +8,7 @@ const TABS = [
   { id: 'general', label: 'General' },
   { id: 'branding', label: 'Branding' },
   { id: 'subcommittees', label: 'Subcommittees' },
+  { id: 'accounts', label: 'Financial Accounts' },
   { id: 'meetings', label: 'Meeting Types' },
 ];
 
@@ -45,6 +46,15 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
     name: '', chair_id: '', description: '', is_active: true, memberIds: [],
   });
 
+  // === Financial Accounts state ===
+  const [orgAccounts, setOrgAccounts] = useState([]);
+  const [editingAcct, setEditingAcct] = useState(null);
+  const [acctSaving, setAcctSaving] = useState(false);
+  const [deleteAcctTarget, setDeleteAcctTarget] = useState(null);
+  const [acctForm, setAcctForm] = useState({
+    name: '', notes: '', is_active: true, sort_order: 0,
+  });
+
   // Load org data
   useEffect(() => {
     if (organization) {
@@ -72,7 +82,19 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
     supabase.from('members').select('id, full_name, board_position')
       .eq('organization_id', organization.id).eq('is_active', true).order('full_name')
       .then(({ data }) => setAllMembers(data || []));
+    fetchOrgAccounts();
   }, [organization]);
+
+  const fetchOrgAccounts = async () => {
+    if (!organization) return;
+    const { data } = await supabase
+      .from('organization_accounts')
+      .select('*')
+      .eq('organization_id', organization.id)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+    setOrgAccounts(data || []);
+  };
 
   const fetchSubcommittees = async () => {
     if (!organization) return;
@@ -196,6 +218,53 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
     }));
   };
 
+// === Financial Account CRUD ===
+  const openAcctModal = (acct = null) => {
+    setError(null);
+    if (acct) {
+      setAcctForm({
+        name: acct.name || '', notes: acct.notes || '',
+        is_active: acct.is_active !== false, sort_order: acct.sort_order || 0,
+      });
+      setEditingAcct(acct.id);
+    } else {
+      const maxOrder = Math.max(0, ...orgAccounts.map(a => a.sort_order || 0));
+      setAcctForm({ name: '', notes: '', is_active: true, sort_order: maxOrder + 1 });
+      setEditingAcct('new');
+    }
+  };
+
+  const saveAcct = async () => {
+    if (!acctForm.name) { setError('Account name is required.'); return; }
+    setAcctSaving(true); setError(null);
+    try {
+      const payload = {
+        name: acctForm.name, notes: acctForm.notes || '',
+        is_active: acctForm.is_active, sort_order: acctForm.sort_order,
+      };
+      if (editingAcct === 'new') {
+        const { error: err } = await supabase.from('organization_accounts')
+          .insert({ ...payload, organization_id: organization.id });
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase.from('organization_accounts')
+          .update(payload).eq('id', editingAcct);
+        if (err) throw err;
+      }
+      await fetchOrgAccounts();
+      setEditingAcct(null);
+    } catch (err) { setError(err.message); }
+    setAcctSaving(false);
+  };
+
+  const deleteAcct = async () => {
+    const { error: err } = await supabase.from('organization_accounts').delete().eq('id', deleteAcctTarget);
+    if (err) { setError(err.message); setDeleteAcctTarget(null); return; }
+    await fetchOrgAccounts();
+    setEditingAcct(null);
+    setDeleteAcctTarget(null);
+  };
+
   if (!isAdmin) {
     return (
       <div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
@@ -220,7 +289,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {saved && <span style={{ color: '#059669', fontSize: 13, fontWeight: 500 }}>Saved!</span>}
           {error && <span style={{ color: '#dc2626', fontSize: 13 }}>{error}</span>}
-          {activeTab !== 'subcommittees' && (
+          {activeTab !== 'subcommittees' && activeTab !== 'accounts' && (
             <button onClick={handleSave} disabled={saving} style={{
               padding: '10px 24px', background: '#1e293b', color: 'white', border: 'none',
               borderRadius: 6, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1,
@@ -445,6 +514,62 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         </div>
       )}
 
+{/* FINANCIAL ACCOUNTS */}
+      {activeTab === 'accounts' && (
+        <div style={{ maxWidth: 700 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: '#1e293b' }}>Financial Accounts</h2>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Define accounts reported on during meetings (e.g., Checking, Investment, PAC Fund).</p>
+            </div>
+            <button onClick={() => openAcctModal()} style={{
+              padding: '10px 20px', background: '#1e293b', color: 'white', border: 'none',
+              borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}>+ New Account</button>
+          </div>
+
+          {orgAccounts.filter(a => a.is_active).length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#059669', marginBottom: 10 }}>Active ({orgAccounts.filter(a => a.is_active).length})</div>
+              {orgAccounts.filter(a => a.is_active).map(acct => (
+                <div key={acct.id} onClick={() => openAcctModal(acct)} style={{
+                  background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16,
+                  marginBottom: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{acct.name}</div>
+                    {acct.notes && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{acct.notes}</div>}
+                  </div>
+                  <span style={{ color: '#9ca3af', fontSize: 13 }}>Edit →</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {orgAccounts.filter(a => !a.is_active).length > 0 && (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 10 }}>Inactive ({orgAccounts.filter(a => !a.is_active).length})</div>
+              {orgAccounts.filter(a => !a.is_active).map(acct => (
+                <div key={acct.id} onClick={() => openAcctModal(acct)} style={{
+                  background: '#f9fafb', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16,
+                  marginBottom: 8, cursor: 'pointer', opacity: 0.7,
+                }}>
+                  <div style={{ fontWeight: 600 }}>{acct.name}</div>
+                  {acct.notes && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{acct.notes}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {orgAccounts.length === 0 && (
+            <div style={{ padding: 48, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ fontSize: 15, marginBottom: 8 }}>No financial accounts defined yet.</div>
+              <div style={{ fontSize: 13 }}>Create accounts like "Checking" or "Investment" to use in meeting minutes.</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MEETING TYPES */}
       {activeTab === 'meetings' && (
         <div style={{ maxWidth: 600 }}>
@@ -546,14 +671,72 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         </div>
       )}
 
+      {/* ACCOUNT MODAL */}
+      {editingAcct && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setEditingAcct(null)}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20, color: '#1e293b' }}>
+              {editingAcct === 'new' ? 'Create' : 'Edit'} Financial Account
+            </h2>
+
+            <Field label="Account Name *" hint="e.g., Checking, Investment, PAC Fund">
+              <input type="text" value={acctForm.name} onChange={e => setAcctForm({ ...acctForm, name: e.target.value })} placeholder="Account name" style={inp} />
+            </Field>
+
+            <Field label="Notes" hint="Who has access, account number last 4 digits, signing authority, etc.">
+              <textarea value={acctForm.notes} onChange={e => setAcctForm({ ...acctForm, notes: e.target.value })} placeholder="Optional notes about this account..." style={{ ...inp, minHeight: 80, resize: 'vertical' }} />
+            </Field>
+
+            <Field label="Display Order" hint="Lower numbers appear first in the dropdown.">
+              <input type="number" value={acctForm.sort_order} onChange={e => setAcctForm({ ...acctForm, sort_order: parseInt(e.target.value) || 0 })} style={{ ...inp, maxWidth: 100 }} />
+            </Field>
+
+            <Field label="Status">
+              <div style={{ display: 'flex', gap: 16 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="radio" checked={acctForm.is_active} onChange={() => setAcctForm({ ...acctForm, is_active: true })} style={{ accentColor: '#059669' }} />
+                  <span>Active</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="radio" checked={!acctForm.is_active} onChange={() => setAcctForm({ ...acctForm, is_active: false })} style={{ accentColor: '#64748b' }} />
+                  <span>Inactive</span>
+                </label>
+              </div>
+            </Field>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
+              <div>
+                {editingAcct !== 'new' && (
+                  <button onClick={() => setDeleteAcctTarget(editingAcct)} style={{
+                    padding: '10px 16px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                    borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                  }}>Delete</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setEditingAcct(null)} style={{
+                  padding: '10px 20px', background: 'white', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                }}>Cancel</button>
+                <button onClick={saveAcct} disabled={acctSaving || !acctForm.name} style={{
+                  padding: '10px 20px', background: '#1e293b', color: 'white', border: 'none',
+                  borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13, opacity: acctSaving || !acctForm.name ? 0.5 : 1,
+                }}>{acctSaving ? 'Saving...' : 'Save'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
-        open={!!deleteScTarget}
-        onClose={() => setDeleteScTarget(null)}
-        onConfirm={deleteSC}
-        title="Delete Subcommittee"
-        message="This will permanently delete this subcommittee."
+        open={!!deleteAcctTarget}
+        onClose={() => setDeleteAcctTarget(null)}
+        onConfirm={deleteAcct}
+        title="Delete Financial Account"
+        message="This will permanently delete this account definition. Existing minutes that reference it will keep their data."
         confirmLabel="Delete"
         variant="danger"
+      />
+t="danger"
       />
     </div>
   );

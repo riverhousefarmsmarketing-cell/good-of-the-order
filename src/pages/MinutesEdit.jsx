@@ -76,6 +76,16 @@ const { toast } = useToast();
       .then(({ data }) => setSubcommittees(data || []));
   }, [profile?.organization_id]);
 
+  // Fetch predefined financial accounts for dropdown
+  const [orgAccounts, setOrgAccounts] = useState([]);
+  useEffect(() => {
+    if (!profile?.organization_id) return;
+    supabase.from('organization_accounts').select('id, name, notes, sort_order')
+      .eq('organization_id', profile.organization_id).eq('is_active', true)
+      .order('sort_order').order('name')
+      .then(({ data }) => setOrgAccounts(data || []));
+  }, [profile?.organization_id]);
+
   useEffect(() => {
     if (isNew) {
       setDraft({
@@ -506,18 +516,54 @@ const { toast } = useToast();
               </Field>
             </Row>
 
-            {/* Multi-Account Balances */}
+            {/* Multi-Account Balances — with predefined dropdown + custom option */}
             <div style={{ marginTop: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Account Balances</span>
-                <button onClick={() => u('accounts', [...(draft.accounts || []), { _id: genTempId(), name: '', balance: '' }])} style={addBtn}>+ Add Account</button>
+                <button onClick={() => {
+                  const firstAcct = orgAccounts.length > 0 ? orgAccounts[0] : null;
+                  u('accounts', [...(draft.accounts || []), {
+                    _id: genTempId(),
+                    account_id: firstAcct?.id || null,
+                    name: firstAcct?.name || '',
+                    balance: '',
+                    is_custom: !firstAcct,
+                  }]);
+                }} style={addBtn}>+ Add Account</button>
               </div>
               {(draft.accounts || []).length === 0 ? (
-                <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#f9fafb', borderRadius: 6 }}>No accounts added. Click "+ Add Account" to track account balances.</div>
+                <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#f9fafb', borderRadius: 6 }}>
+                  {orgAccounts.length > 0
+                    ? 'No accounts added. Click "+ Add Account" to report balances.'
+                    : 'No accounts added. Set up predefined accounts in Settings → Financial Accounts, or click "+ Add Account" to add manually.'}
+                </div>
               ) : (
                 (draft.accounts || []).map((acct, i) => (
-                  <div key={acct.id || acct._id || i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <input type="text" value={acct.name} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], name: e.target.value }; u('accounts', a); }} placeholder="Account name (e.g., Checking, Savings, PAC)" style={{ ...inp, flex: 1 }} />
+                  <div key={acct.id || acct._id || i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                    {orgAccounts.length > 0 ? (
+                      <select
+                        value={acct.is_custom ? '__custom__' : (acct.account_id || '')}
+                        onChange={e => {
+                          const a = [...draft.accounts];
+                          if (e.target.value === '__custom__') {
+                            a[i] = { ...a[i], account_id: null, name: '', is_custom: true };
+                          } else {
+                            const selected = orgAccounts.find(oa => oa.id === e.target.value);
+                            a[i] = { ...a[i], account_id: selected?.id || null, name: selected?.name || '', is_custom: false };
+                          }
+                          u('accounts', a);
+                        }}
+                        style={{ ...inp, flex: 1, maxWidth: 220 }}
+                      >
+                        {orgAccounts.map(oa => (
+                          <option key={oa.id} value={oa.id}>{oa.name}</option>
+                        ))}
+                        <option value="__custom__">— Custom —</option>
+                      </select>
+                    ) : null}
+                    {(acct.is_custom || orgAccounts.length === 0) && (
+                      <input type="text" value={acct.name} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], name: e.target.value }; u('accounts', a); }} placeholder="Account name" style={{ ...inp, flex: 1 }} />
+                    )}
                     <input type="text" value={acct.balance} onChange={e => { const a = [...draft.accounts]; a[i] = { ...a[i], balance: sanitizeMoney(e.target.value) }; u('accounts', a); }} placeholder="Balance" style={{ ...inp, width: 140 }} />
                     <button onClick={() => u('accounts', draft.accounts.filter((_, idx) => idx !== i))} style={delBtn}>×</button>
                   </div>
