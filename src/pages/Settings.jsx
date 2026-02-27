@@ -69,7 +69,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
   useEffect(() => {
     if (!organization) return;
     fetchSubcommittees();
-    supabase.from('profiles').select('id, full_name, role')
+    supabase.from('members').select('id, full_name, board_position')
       .eq('organization_id', organization.id).eq('is_active', true).order('full_name')
       .then(({ data }) => setAllMembers(data || []));
   }, [organization]);
@@ -78,7 +78,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
     if (!organization) return;
     const { data } = await supabase
       .from('subcommittees')
-      .select('*, chair:profiles!subcommittees_chair_id_fkey(id, full_name), subcommittee_members(member_id, profiles(id, full_name))')
+      .select('*, chair:members!subcommittees_chair_id_fkey(id, full_name), subcommittee_members(member_id, member:members!subcommittee_members_member_id_fkey(id, full_name))')
       .eq('organization_id', organization.id)
       .order('name');
     setSubcommittees(data || []);
@@ -500,7 +500,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
                     <input type="checkbox" checked={scForm.memberIds.includes(m.id)} onChange={() => toggleSCMember(m.id)} disabled={m.id === scForm.chair_id} style={{ accentColor: '#059669' }} />
                     <span style={{ fontSize: 14 }}>{m.full_name}</span>
                     {m.id === scForm.chair_id && <span style={{ fontSize: 11, color: '#64748b' }}>(Chair)</span>}
-                    {m.role && <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px', background: '#f1f5f9', borderRadius: 8, color: '#64748b' }}>{m.role}</span>}
+                    {m.board_position && <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px', background: '#f1f5f9', borderRadius: 8, color: '#64748b' }}>{m.board_position}</span>}
                   </label>
                 ))}
               </div>
