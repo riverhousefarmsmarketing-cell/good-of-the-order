@@ -736,8 +736,6 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         confirmLabel="Delete"
         variant="danger"
       />
-t="danger"
-      />
     </div>
   );
 }
