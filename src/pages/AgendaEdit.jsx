@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAgendas } from '../hooks/useAgendas.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 
 import { useToast } from '../components/ui/Toast';
@@ -39,6 +40,15 @@ const { toast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [subcommittees, setSubcommittees] = useState([]);
+
+  // Fetch subcommittees for the dropdown
+  useEffect(() => {
+    if (!organization) return;
+    supabase.from('subcommittees').select('id, name')
+      .eq('organization_id', organization.id).eq('is_active', true).order('name')
+      .then(({ data }) => setSubcommittees(data || []));
+  }, [organization]);
 
 const isNew = !id;
 
@@ -46,6 +56,7 @@ const isNew = !id;
     if (isNew) {
       setDraft({
         meeting_type: 'BOARD', meeting_date: '', meeting_time: '', location: '', status: 'draft',
+        subcommittee_id: null,
         items: getStandardItems().map((item, i) => ({ ...item, _id: genTempId(), sort_order: i + 1 })),
       });
       // Fetch suggestions from recent minutes
@@ -66,6 +77,10 @@ const isNew = !id;
     setDraft(prev => ({ ...prev, [field]: value }));
     // Refresh suggestions when meeting type changes
     if (field === 'meeting_type' && isNew) {
+      // Clear subcommittee_id if switching away from SUBCOMMITTEE
+      if (value !== 'SUBCOMMITTEE') {
+        setDraft(prev => ({ ...prev, subcommittee_id: null }));
+      }
       setSuggestionsLoading(true);
       fetchSuggestedItems(value).then(items => {
         setSuggestions(items);
@@ -94,6 +109,7 @@ const isNew = !id;
 
   const handleFinalize = () => {
     if (!draft.meeting_date) { toast.warning('Please set a meeting date before finalizing.'); return; }
+    if (draft.meeting_type === 'SUBCOMMITTEE' && !draft.subcommittee_id) { toast.warning('Please select a subcommittee before finalizing.'); return; }
     handleSave('final');
   };
 
@@ -177,6 +193,15 @@ const isNew = !id;
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Meeting Type</label><select value={draft.meeting_type} onChange={e => u('meeting_type', e.target.value)} disabled={draft.status !== 'draft'} style={inp}>{MEETING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Meeting Date *</label><input type="date" value={draft.meeting_date || ''} onChange={e => u('meeting_date', e.target.value)} style={inp} /></div>
           </div>
+          {draft.meeting_type === 'SUBCOMMITTEE' && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Subcommittee *</label>
+              <select value={draft.subcommittee_id || ''} onChange={e => u('subcommittee_id', e.target.value || null)} style={inp}>
+                <option value="">Select subcommittee...</option>
+                {subcommittees.map(sc => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="goto-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Time</label><input type="text" value={draft.meeting_time || ''} onChange={e => u('meeting_time', e.target.value)} placeholder="e.g., 7:00 PM" style={inp} /></div>
             <div><label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 }}>Location</label><input type="text" value={draft.location || ''} onChange={e => u('location', e.target.value)} placeholder="Meeting location" style={inp} /></div>
