@@ -8,7 +8,6 @@ import { supabase } from '../lib/supabase';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
-import { downloadMinutesPDF } from '../utils/generateMinutesPDF';
 
 const MEETING_TYPES = [
   { value: 'BOARD', label: 'Board' },
@@ -323,7 +322,7 @@ const { toast } = useToast();
           {isLocked && !isNew && (
             <>
               {draft.status === 'approved' && <button onClick={handleCreateRevision} disabled={saving} style={{ padding: '8px 18px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📝 Create Revision</button>}
-              <button onClick={() => downloadMinutesPDF(draft, members, organization, distributionLogs)} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
+              <button onClick={async () => { const { downloadMinutesPDF } = await import('../utils/generateMinutesPDF'); downloadMinutesPDF(draft, members, organization, distributionLogs); }} disabled={saving} style={{ padding: '8px 18px', background: '#475569', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>📄 PDF</button>
               {draft.status === 'approved' && <button onClick={() => setShowSendModal(true)} disabled={saving} style={{ padding: '8px 18px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 6, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontSize: 13 }}>✉ Send</button>}
             </>
           )}
