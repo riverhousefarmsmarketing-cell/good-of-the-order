@@ -49,7 +49,6 @@ function loadImageAsBase64(url) {
 // ─── Main export ─────────────────────────────────────────────────────
 export async function downloadMinutesPDF(draft, members, organization, distributionLogs = []) {
   // BUG-409 FIX: Graceful fallback if jsPDF fails
-  let doc;
   try {
     // Load logo before generating PDF
     const logo = await loadImageAsBase64(organization?.logo_url);

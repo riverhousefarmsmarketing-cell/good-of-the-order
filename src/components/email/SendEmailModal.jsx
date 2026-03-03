@@ -259,10 +259,10 @@ export default function SendEmailModal({ open, onClose, documentType, documentId
               {activeMembers.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                    Members ({activeMembers.filter(m => m.email && selectedEmails.has(m.email)).length}/{activeMembers.length})
+                    Members ({activeMembers.filter(m => m.email && selectedEmails.has(m.email)).length}/{activeMembers.filter(m => m.email).length})
                   </div>
                   <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-                    {activeMembers.map((m, i) => (
+                    {activeMembers.filter(m => m.email).map((m, i) => (
                       <ContactRow
                         key={m.id}
                         name={m.full_name}
