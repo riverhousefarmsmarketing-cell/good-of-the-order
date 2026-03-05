@@ -326,7 +326,8 @@ const minutesId = rpcResult.id;
   // Returns matching minutes IDs for client-side filtering
   const searchMinutes = useCallback(async (query) => {
     if (!query || !query.trim()) return null; // null = no filter
-    const q = `%${query.trim()}%`;
+    const escaped = query.trim().replace(/[%_\\]/g, '\\$&');
+    const q = `%${escaped}%`;
 
     // Search across main minutes text fields
     const { data: mainHits } = await supabase

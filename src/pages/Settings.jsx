@@ -728,6 +728,16 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
       )}
 
       <ConfirmDialog
+        open={!!deleteScTarget}
+        onClose={() => setDeleteScTarget(null)}
+        onConfirm={deleteSC}
+        title="Delete Subcommittee"
+        message="This will permanently delete this subcommittee and remove all member assignments. Minutes referencing this subcommittee will keep their data."
+        confirmLabel="Delete"
+        variant="danger"
+      />
+
+      <ConfirmDialog
         open={!!deleteAcctTarget}
         onClose={() => setDeleteAcctTarget(null)}
         onConfirm={deleteAcct}

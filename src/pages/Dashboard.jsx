@@ -67,7 +67,7 @@ export default function DashboardPage() {
             .eq('status', 'pending')
             .limit(5),
           // Count-only queries (lightweight — no data transferred)
-          supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
+          supabase.from('members').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('events').select('id', { count: 'exact', head: true }),
         ]);
 
