@@ -24,6 +24,7 @@ export default function MembersPage() {
   const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', board_position: '', notes: '', role: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState(null);
+  const [inviteSending, setInviteSending] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [memberForm, setMemberForm] = useState({ fullName: '', email: '', phone: '', boardPosition: '' });
   const [sendInviteChecked, setSendInviteChecked] = useState(false);
@@ -101,6 +102,26 @@ const { toast } = useToast();
       await updateMember(id, { [field]: value });
     } catch (err) {
       toast.error(err.message || 'Unable to update member. Please try again.');
+    }
+  };
+
+  const handleSendInvite = async (member) => {
+    if (!member.email) return;
+    setInviteSending(true);
+    try {
+      const result = await sendInvitation({
+        email: member.email,
+        fullName: member.full_name,
+        role: 'viewer',
+        boardPosition: member.board_position,
+      });
+      if (result?.inviteUrl) setLastInviteUrl(result.inviteUrl);
+      toast.success(`Invitation sent to ${member.full_name}`);
+      setEditingMember(null);
+    } catch (err) {
+      toast.error(err.message || 'Failed to send invitation. Please try again.');
+    } finally {
+      setInviteSending(false);
     }
   };
 
@@ -688,8 +709,51 @@ const { toast } = useToast();
                     ? 'You cannot change your own role.'
                     : editingMember.invite_pending
                       ? `Invited as ${ROLES.find(r => r.value === editingMember.role)?.label || editingMember.role} — role applies when they accept.`
-                      : 'No login account yet. Send an invitation to assign a role.'}
+                      : 'No login account yet.'}
                 </div>
+              )}
+              {/* Send Invite button — shown when no account and email exists */}
+              {!editingMember.has_account && !editingMember.invite_pending && editForm.email && editingMember.id !== profile?.id && (
+                <button
+                  onClick={async () => {
+                    // Save current edits first so the invite uses the latest email
+                    await handleSaveEdit();
+                    const updated = { ...editingMember, email: editForm.email, full_name: editForm.full_name, board_position: editForm.board_position };
+                    await handleSendInvite(updated);
+                  }}
+                  disabled={inviteSending || editSaving}
+                  style={{
+                    marginTop: 8, width: '100%', padding: '9px 16px',
+                    background: '#f0fdf4', border: '1px solid #bbf7d0',
+                    borderRadius: 6, fontSize: 13, fontWeight: 500,
+                    color: '#166534', cursor: inviteSending ? 'wait' : 'pointer',
+                    opacity: inviteSending ? 0.6 : 1,
+                  }}
+                >
+                  {inviteSending ? 'Sending...' : `✉ Send Login Invitation to ${editForm.email}`}
+                </button>
+              )}
+              {!editingMember.has_account && editingMember.invite_pending && (
+                <button
+                  onClick={async () => {
+                    const updated = { ...editingMember, email: editForm.email, full_name: editForm.full_name, board_position: editForm.board_position };
+                    await handleSendInvite(updated);
+                  }}
+                  disabled={inviteSending}
+                  style={{
+                    marginTop: 8, width: '100%', padding: '9px 16px',
+                    background: '#fffbeb', border: '1px solid #fde68a',
+                    borderRadius: 6, fontSize: 13, fontWeight: 500,
+                    color: '#92400e', cursor: inviteSending ? 'wait' : 'pointer',
+                    opacity: inviteSending ? 0.6 : 1,
+                  }}
+                >
+                  {inviteSending ? 'Sending...' : '↺ Resend Invitation'}
+                </button>
+              )}
+              {/* Hidden placeholder to keep structure valid when role select is shown */}
+              {(editingMember.has_account || editingMember.id === profile?.id) && (
+                <></>
               )}
             </div>
 
