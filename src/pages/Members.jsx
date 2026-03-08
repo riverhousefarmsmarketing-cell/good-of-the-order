@@ -16,7 +16,7 @@ const BOARD_POSITIONS = [
 ];
 
 export default function MembersPage() {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, profile, organization } = useAuth();
   const { members, invitations, loading, createMember, updateMember, deactivateMember, reactivateMember, sendInvitation, cancelInvitation } = useMembers();
   const [showInvite, setShowInvite] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -34,6 +34,15 @@ const { toast } = useToast();
 
   const activeMembers = members.filter((m) => m.is_active);
   const inactiveMembers = members.filter((m) => !m.is_active);
+
+  // Derive board positions from org default_roles, fall back to hardcoded list
+  const boardPositions = (organization?.default_roles || [])
+    .sort((a, b) => a.order - b.order)
+    .map((r) => r.title)
+    .filter(Boolean);
+  const positionOptions = boardPositions.length > 0
+    ? boardPositions
+    : ['President', 'Vice President', 'Secretary', 'Treasurer', 'Board Member', 'Committee Chair', 'Ex Officio'];
 
   const [lastInviteUrl, setLastInviteUrl] = useState(null);
 
@@ -472,7 +481,7 @@ const { toast } = useToast();
                   }}
                 >
                   <option value="">None</option>
-                  {BOARD_POSITIONS.filter(Boolean).map((p) => (
+                  {positionOptions.map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
@@ -646,7 +655,7 @@ const { toast } = useToast();
                 }}
               >
                 <option value="">No position</option>
-                {BOARD_POSITIONS.filter(Boolean).map((p) => (
+                {positionOptions.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
