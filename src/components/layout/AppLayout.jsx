@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth.jsx';
+import { FeedbackWidget } from '../ui/FeedbackWidget.jsx';
 import { useOrganization } from '../../hooks/useOrganization.jsx';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -15,6 +17,7 @@ const NAV_ITEMS = [
 
 export default function AppLayout({ children }) {
   const { profile, signOut, isAdmin, isEditor } = useAuth();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { branding } = useOrganization();
   const location = useLocation();
 
@@ -112,6 +115,16 @@ export default function AppLayout({ children }) {
 
         {/* Right side */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            style={{
+              padding: '6px 12px', borderRadius: 6, fontSize: 13,
+              color: 'rgba(255,255,255,0.8)', background: 'transparent',
+              border: 'none', cursor: 'pointer',
+            }}
+          >
+            💬 Feedback
+          </button>
           {isAdmin && (
             <Link
               to="/settings"
@@ -162,6 +175,7 @@ export default function AppLayout({ children }) {
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '0 8px' }}>
         {children}
       </main>
+      <FeedbackWidget open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       <style>{`
         /* BUG-501 FIX: Mobile responsive breakpoints */
         /* BUG-821 FIX: Use class selectors instead of fragile style attribute matching */
