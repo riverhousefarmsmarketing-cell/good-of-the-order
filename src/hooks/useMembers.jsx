@@ -17,14 +17,42 @@ export function useMembers({ autoFetch = true } = {}) {
 
   const fetchMembers = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('members')
-        .select('*')
-        .order('board_position_order', { ascending: true, nullsFirst: false })
-        .order('full_name');
+      // Fetch members, their linked profile role, and any pending invitation role
+      const [membersResult, profilesResult, invitationsResult] = await Promise.all([
+        supabase
+          .from('members')
+          .select('*')
+          .order('board_position_order', { ascending: true, nullsFirst: false })
+          .order('full_name'),
+        supabase
+          .from('profiles')
+          .select('id, role'),
+        supabase
+          .from('invitations')
+          .select('email, role')
+          .is('accepted_at', null),
+      ]);
 
-      if (fetchError) throw fetchError;
-      setMembers(data || []);
+      if (membersResult.error) throw membersResult.error;
+
+      const profileRoleMap = Object.fromEntries(
+        (profilesResult.data || []).map((p) => [p.id, p.role])
+      );
+      const inviteRoleMap = Object.fromEntries(
+        (invitationsResult.data || []).map((inv) => [inv.email?.toLowerCase(), inv.role])
+      );
+
+      // Attach role: profile role takes precedence, then pending invite, then null
+      const enriched = (membersResult.data || []).map((m) => ({
+        ...m,
+        role: m.linked_profile_id
+          ? (profileRoleMap[m.linked_profile_id] || null)
+          : (m.email ? (inviteRoleMap[m.email.toLowerCase()] || null) : null),
+        has_account: !!m.linked_profile_id,
+        invite_pending: !m.linked_profile_id && !!(m.email && inviteRoleMap[m.email?.toLowerCase()]),
+      }));
+
+      setMembers(enriched);
     } catch (err) {
       console.error('Error fetching members:', err);
       setError(err.message);
@@ -86,14 +114,32 @@ export function useMembers({ autoFetch = true } = {}) {
   }, [fetchMembers]);
 
   const updateMember = useCallback(async (id, updates) => {
-    const { error: updateError } = await supabase
-      .from('members')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id);
+    const { role, ...memberUpdates } = updates;
 
-    if (updateError) throw updateError;
+    // Update non-role fields on the members table
+    if (Object.keys(memberUpdates).length > 0) {
+      const { error: memberError } = await supabase
+        .from('members')
+        .update({ ...memberUpdates, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (memberError) throw memberError;
+    }
+
+    // Role updates go to profiles — requires a linked account
+    if (role !== undefined) {
+      const member = members.find((m) => m.id === id);
+      if (!member?.linked_profile_id) {
+        throw new Error('This member does not have a login account yet. Send them an invitation first.');
+      }
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', member.linked_profile_id);
+      if (profileError) throw profileError;
+    }
+
     await fetchMembers();
-  }, [fetchMembers]);
+  }, [fetchMembers, members]);
 
   const deactivateMember = useCallback(async (id) => {
     await updateMember(id, { is_active: false });

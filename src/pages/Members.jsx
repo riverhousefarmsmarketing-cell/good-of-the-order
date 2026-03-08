@@ -20,6 +20,10 @@ export default function MembersPage() {
   const { members, invitations, loading, createMember, updateMember, deactivateMember, reactivateMember, sendInvitation, cancelInvitation } = useMembers();
   const [showInvite, setShowInvite] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', board_position: '', notes: '', role: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
   const [memberForm, setMemberForm] = useState({ fullName: '', email: '', phone: '', boardPosition: '' });
   const [sendInviteChecked, setSendInviteChecked] = useState(false);
@@ -87,7 +91,49 @@ const { toast } = useToast();
     try {
       await updateMember(id, { [field]: value });
     } catch (err) {
-      toast.error('Unable to update member. Please try again.');
+      toast.error(err.message || 'Unable to update member. Please try again.');
+    }
+  };
+
+  const openEditModal = (member) => {
+    setEditForm({
+      full_name: member.full_name || '',
+      email: member.email || '',
+      phone: member.phone || '',
+      board_position: member.board_position || '',
+      notes: member.notes || '',
+      role: member.role || '',
+    });
+    setEditError(null);
+    setEditingMember(member);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.full_name.trim()) {
+      setEditError('Full name is required.');
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updates = {
+        full_name: editForm.full_name.trim(),
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        board_position: editForm.board_position || null,
+        notes: editForm.notes.trim() || null,
+      };
+      // Role handled separately (routes to profiles)
+      if (editForm.role && editForm.role !== editingMember.role) {
+        updates.role = editForm.role;
+      }
+      await updateMember(editingMember.id, updates);
+      toast.success(`${editForm.full_name} updated`);
+      setEditingMember(null);
+    } catch (err) {
+      setEditError(err.message || 'Unable to save changes. Please try again.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -189,7 +235,6 @@ const { toast } = useToast();
           </div>
         ) : (
           activeMembers.map((member) => {
-            const isEditing = editingId === member.id;
             const isCurrentUser = member.id === profile?.id;
             return (
               <div
@@ -197,8 +242,7 @@ const { toast } = useToast();
                 style={{
                   display: 'grid', gridTemplateColumns: '1fr 160px 140px 100px',
                   padding: '14px 20px', borderBottom: '1px solid #f1f5f9',
-                  alignItems: 'center',
-                  background: isEditing ? '#f8fafc' : 'white',
+                  alignItems: 'center', background: 'white',
                 }}
               >
                 {/* Name & Email */}
@@ -221,103 +265,65 @@ const { toast } = useToast();
                         }}>You</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: '#64748b' }}>{member.email}</div>
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      {member.email || <span style={{ color: '#94a3b8' }}>No email</span>}
+                    </div>
+                    {member.phone && (
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{member.phone}</div>
+                    )}
                   </div>
                 </div>
 
                 {/* Position */}
                 <div>
-                  {isEditing && isAdmin ? (
-                    <select
-                      value={member.board_position || ''}
-                      onChange={(e) => handleUpdateMember(member.id, 'board_position', e.target.value || null)}
-                      style={{
-                        width: '100%', padding: '6px 8px', border: '1px solid #d1d5db',
-                        borderRadius: 4, fontSize: 13,
-                      }}
-                    >
-                      <option value="">No position</option>
-                      {BOARD_POSITIONS.filter(Boolean).map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span style={{
-                      fontSize: 13,
-                      color: member.board_position ? '#1e293b' : '#94a3b8',
-                    }}>
-                      {member.board_position || 'No position'}
-                    </span>
-                  )}
+                  <span style={{ fontSize: 13, color: member.board_position ? '#1e293b' : '#94a3b8' }}>
+                    {member.board_position || 'No position'}
+                  </span>
                 </div>
 
                 {/* Role */}
                 <div>
-                  {isEditing && isAdmin && !isCurrentUser ? (
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleUpdateMember(member.id, 'role', e.target.value)}
-                      style={{
-                        width: '100%', padding: '6px 8px', border: '1px solid #d1d5db',
-                        borderRadius: 4, fontSize: 13,
-                      }}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
-                  ) : (
+                  {member.role ? (
                     <span style={{
                       padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500,
                       background: member.role === 'admin' ? '#dbeafe' : member.role === 'editor' ? '#dcfce7' : '#f3f4f6',
                       color: member.role === 'admin' ? '#1e40af' : member.role === 'editor' ? '#166534' : '#64748b',
                     }}>
                       {ROLES.find((r) => r.value === member.role)?.label || member.role}
+                      {member.invite_pending ? ' (invited)' : ''}
                     </span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>
                   )}
                 </div>
 
                 {/* Actions */}
                 <div style={{ textAlign: 'right' }}>
                   {isAdmin && (
-                    <>
-                      {isEditing ? (
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => openEditModal(member)}
+                        style={{
+                          padding: '5px 10px', background: '#f1f5f9',
+                          border: '1px solid #e2e8f0', borderRadius: 4,
+                          fontSize: 12, cursor: 'pointer', color: '#475569',
+                        }}
+                      >
+                        Edit
+                      </button>
+                      {!isCurrentUser && (
                         <button
-                          onClick={() => setEditingId(null)}
+                          onClick={() => setDeactivateTarget(member)}
                           style={{
-                            padding: '5px 12px', background: '#1e293b', color: 'white',
-                            border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+                            padding: '5px 10px', background: '#fef2f2',
+                            border: '1px solid #fecaca', borderRadius: 4,
+                            fontSize: 12, cursor: 'pointer', color: '#dc2626',
                           }}
                         >
-                          Done
+                          Deactivate
                         </button>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => setEditingId(member.id)}
-                            style={{
-                              padding: '5px 10px', background: '#f1f5f9',
-                              border: '1px solid #e2e8f0', borderRadius: 4,
-                              fontSize: 12, cursor: 'pointer', color: '#475569',
-                            }}
-                          >
-                            Edit
-                          </button>
-                          {!isCurrentUser && (
-                            <button
-                              onClick={() => setDeactivateTarget(member)}
-                              style={{
-                                padding: '5px 10px', background: '#fef2f2',
-                                border: '1px solid #fecaca', borderRadius: 4,
-                                fontSize: 12, cursor: 'pointer', color: '#dc2626',
-                              }}
-                            >
-                              Deactivate
-                            </button>
-                          )}
-                        </div>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -542,6 +548,187 @@ const { toast } = useToast();
           </div>
         </div>
       )}
+      {/* Edit Member Modal */}
+      {editingMember && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.4)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', zIndex: 100,
+          }}
+          onClick={() => setEditingMember(null)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setEditingMember(null); }}
+          tabIndex={-1}
+        >
+          <div
+            style={{
+              background: 'white', borderRadius: 10, padding: 28,
+              width: '100%', maxWidth: 480,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1e293b', margin: '0 0 20px' }}>
+              Edit Member
+            </h2>
+
+            {editError && (
+              <div style={{
+                padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 6, color: '#dc2626', fontSize: 13, marginBottom: 16,
+              }}>
+                {editError}
+              </div>
+            )}
+
+            {/* Full Name */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                Full Name <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={editForm.full_name}
+                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditingMember(null); }}
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Email + Phone */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                  Email <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  placeholder="member@example.com"
+                  style={{
+                    width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                    borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                  Phone <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="(555) 123-4567"
+                  style={{
+                    width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                    borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Board Position */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                Board Position
+              </label>
+              <select
+                value={editForm.board_position}
+                onChange={(e) => setEditForm({ ...editForm, board_position: e.target.value })}
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 6, fontSize: 14,
+                }}
+              >
+                <option value="">No position</option>
+                {BOARD_POSITIONS.filter(Boolean).map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Role — only editable if they have a login account */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                Login Role
+              </label>
+              {editingMember.has_account && editingMember.id !== profile?.id ? (
+                <select
+                  value={editForm.role || 'viewer'}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  style={{
+                    width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                    borderRadius: 6, fontSize: 14,
+                  }}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{
+                  padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0',
+                  borderRadius: 6, fontSize: 13, color: '#64748b',
+                }}>
+                  {editingMember.id === profile?.id
+                    ? 'You cannot change your own role.'
+                    : editingMember.invite_pending
+                      ? `Invited as ${ROLES.find(r => r.value === editingMember.role)?.label || editingMember.role} — role applies when they accept.`
+                      : 'No login account yet. Send an invitation to assign a role.'}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+                Notes <span style={{ fontWeight: 400, color: '#94a3b8' }}>(admin only)</span>
+              </label>
+              <textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder="Term dates, committee assignments, contact preferences..."
+                rows={3}
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 6, fontSize: 14, boxSizing: 'border-box',
+                  resize: 'vertical', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button
+                onClick={() => setEditingMember(null)}
+                style={{
+                  padding: '10px 20px', background: 'white', border: '1px solid #d1d5db',
+                  borderRadius: 6, fontSize: 14, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editForm.full_name.trim() || editSaving}
+                style={{
+                  padding: '10px 20px', background: '#1e293b', color: 'white',
+                  border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600,
+                  cursor: editSaving ? 'wait' : 'pointer',
+                  opacity: !editForm.full_name.trim() || editSaving ? 0.6 : 1,
+                }}
+              >
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 <ConfirmDialog
         open={!!deactivateTarget}
         onClose={() => setDeactivateTarget(null)}
