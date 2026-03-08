@@ -46,7 +46,7 @@ export function FeedbackWidget({ open: controlledOpen, onOpenChange }) {
       const typeLabel = TYPES.find((t) => t.value === type)?.label || type;
       await supabase.functions.invoke('send-email', {
         body: {
-          to: ['support@goodoftheorder.app'],
+          to: ['christine@riverhousedairy.com'],
           subject: `[GoodOfTheOrder Feedback] ${typeLabel} from ${profile.full_name}`,
           html: `
             <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#1e293b">
