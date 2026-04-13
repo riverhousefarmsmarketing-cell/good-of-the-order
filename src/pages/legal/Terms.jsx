@@ -147,9 +147,6 @@ export default function TermsPage() {
         All tiers include unlimited users, unlimited meeting records, PDF export, email distribution, and support. We do not charge per seat or per user.
         We do not gate compliance-critical features behind higher pricing tiers.
       </p>
-        All tiers include unlimited users, unlimited meeting records, PDF export, email distribution, and support. We do not charge per seat or per user.
-        We do not gate compliance-critical features behind higher pricing tiers.
-      </p>
       <h3 style={s.h3}>7.2 Payment Processing</h3>
       <p style={s.p}>
         Payments are processed through Stripe, Inc. By providing payment information, you agree to Stripe's terms of service.
