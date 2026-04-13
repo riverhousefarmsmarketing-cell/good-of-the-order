@@ -200,8 +200,9 @@ export default function App() {
                 <Route path="distribution" element={<RoleGuard minRole="admin"><DistributionListPage /></RoleGuard>} />
                 <Route path="settings" element={<RoleGuard minRole="admin"><SettingsPage /></RoleGuard>} />
 
-                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
+              {/* Catch-all: unknown routes redirect home */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
