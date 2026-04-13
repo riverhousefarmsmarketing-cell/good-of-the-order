@@ -13,6 +13,8 @@ const EventEditPage = React.lazy(() => import('./pages/EventEdit'));
 const SettingsPage = React.lazy(() => import('./pages/Settings'));
 const DistributionListPage = React.lazy(() => import('./pages/DistributionList'));
 const EmailHistoryPage = React.lazy(() => import('./pages/EmailHistory'));
+const TermsPage = React.lazy(() => import('./pages/legal/Terms'));
+const PrivacyPage = React.lazy(() => import('./pages/legal/Privacy'));
 
 // Eagerly load lightweight/critical-path pages
 import LoginPage from './pages/Login';
@@ -174,6 +176,8 @@ export default function App() {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/terms" element={<Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}><TermsPage /></Suspense>} />
+              <Route path="/privacy" element={<Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}><PrivacyPage /></Suspense>} />
 
               {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
               <Route element={<ProtectedLayout />}>
