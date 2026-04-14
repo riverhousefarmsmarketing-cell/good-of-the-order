@@ -24,8 +24,6 @@ import MinutesArchivePage from './pages/MinutesArchive';
 import AgendasListPage from './pages/AgendasList';
 import EventsListPage from './pages/EventsList';
 import AppLayout from './components/layout/AppLayout';
-import TermsPage from './pages/legal/Terms';
-import PrivacyPage from './pages/legal/Privacy';
 
 /**
  * LandingOrDashboard — shows LandingPage for visitors, Dashboard for logged-in users.
