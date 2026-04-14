@@ -13,6 +13,8 @@ const EventEditPage = React.lazy(() => import('./pages/EventEdit'));
 const SettingsPage = React.lazy(() => import('./pages/Settings'));
 const DistributionListPage = React.lazy(() => import('./pages/DistributionList'));
 const EmailHistoryPage = React.lazy(() => import('./pages/EmailHistory'));
+const TermsPage = React.lazy(() => import('./pages/legal/Terms'));
+const PrivacyPage = React.lazy(() => import('./pages/legal/Privacy'));
 
 // Eagerly load lightweight/critical-path pages
 import LoginPage from './pages/Login';
@@ -24,8 +26,6 @@ import MinutesArchivePage from './pages/MinutesArchive';
 import AgendasListPage from './pages/AgendasList';
 import EventsListPage from './pages/EventsList';
 import AppLayout from './components/layout/AppLayout';
-import TermsPage from './pages/legal/Terms';
-import PrivacyPage from './pages/legal/Privacy';
 
 /**
  * LandingOrDashboard — shows LandingPage for visitors, Dashboard for logged-in users.
@@ -176,9 +176,9 @@ export default function App() {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/terms" element={<div style={{padding:40,fontFamily:"sans-serif"}}><h1>TERMS STUB - routing works</h1></div>} />
-              <Route path="/test-route-abc123" element={<div style={{padding:40,background:"lime",fontFamily:"sans-serif"}}><h1>TEST ROUTE WORKS</h1><p>path: {window.location.pathname}</p></div>} />
-              <Route path="/privacy" element={<div style={{padding:40,fontFamily:"sans-serif"}}><h1>PRIVACY STUB - routing works</h1></div>} />
+              <Route path="/terms" element={<React.Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}><TermsPage /></React.Suspense>} />
+              
+              <Route path="/privacy" element={<React.Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}><PrivacyPage /></React.Suspense>} />
 
               {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
               <Route element={<ProtectedLayout />}>
@@ -202,6 +202,8 @@ export default function App() {
                 <Route path="settings" element={<RoleGuard minRole="admin"><SettingsPage /></RoleGuard>} />
 
               </Route>
+              {/* Catch-all: unknown routes redirect home */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
