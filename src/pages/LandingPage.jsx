@@ -665,8 +665,8 @@ function FooterSection() {
         </div>
         <div>
           <h4 style={{ color: C.white, fontSize: 12, fontWeight: 600, marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Legal</h4>
-          <a href="/legal/privacy" style={{ display: 'block', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, marginBottom: 8 }}>Privacy Policy</a>
-          <a href="/legal/terms" style={{ display: 'block', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, marginBottom: 8 }}>Terms of Service</a>
+          <a href="/privacy" style={{ display: 'block', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, marginBottom: 8 }}>Privacy Policy</a>
+          <a href="/terms" style={{ display: 'block', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, marginBottom: 8 }}>Terms of Service</a>
           <a href="mailto:support@goodoftheorder.app" style={{ display: 'block', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, marginBottom: 8 }}>Contact</a>
         </div>
       </div>
