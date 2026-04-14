@@ -176,8 +176,8 @@ export default function App() {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/terms" element={<TermsPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<div style={{padding:40,fontFamily:"sans-serif"}}><h1>TERMS STUB - routing works</h1></div>} />
+              <Route path="/privacy" element={<div style={{padding:40,fontFamily:"sans-serif"}}><h1>PRIVACY STUB - routing works</h1></div>} />
 
               {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
               <Route element={<ProtectedLayout />}>
