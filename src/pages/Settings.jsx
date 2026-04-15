@@ -781,9 +781,7 @@ function BillingTab({ organization, supabase }) {
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [portalError, setPortalError] = useState(null);
 
-  const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL?.replace(
-    '.supabase.co', '.supabase.co/functions/v1'
-  );
+  const SUPABASE_FUNCTIONS_URL = 'https://qacoauhyahswkluayxhm.supabase.co/functions/v1';
 
   const handlePortal = async () => {
     setPortalError(null);

@@ -12,7 +12,7 @@ const PRICE_IDS = {
   annual:  'price_1TMXlq7rIwjFQ2JVwyZ47NkK',
 };
 
-const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL?.replace('.supabase.co', '.supabase.co/functions/v1');
+const SUPABASE_FUNCTIONS_URL = 'https://qacoauhyahswkluayxhm.supabase.co/functions/v1';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
