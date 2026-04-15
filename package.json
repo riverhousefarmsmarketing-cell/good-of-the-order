@@ -10,6 +10,7 @@
     "lint": "eslint . --ext js,jsx"
   },
   "dependencies": {
+    "@sentry/react": "^10.48.0",
     "@supabase/supabase-js": "^2.49.0",
     "jspdf": "^4.1.0",
     "react": "^18.3.0",

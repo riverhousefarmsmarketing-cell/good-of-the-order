@@ -1,6 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import * as Sentry from '@sentry/react';
+
+// OPS-7: Production error tracking
+// Disabled in development — only active when VITE_SENTRY_DSN is set
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    // Sample 10% of transactions for performance monitoring
+    tracesSampleRate: 0.1,
+    // Do NOT capture request bodies — meeting content must never reach Sentry
+    beforeSend(event) {
+      // Strip any request body data
+      if (event.request) {
+        delete event.request.data;
+      }
+      return event;
+    },
+  });
+}
 
 // Global styles
 const globalStyles = document.createElement('style');
