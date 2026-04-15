@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useOrganization } from '../hooks/useOrganization';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const STATUS_COLORS = {
   draft: { bg: '#fef3c7', color: '#92400e' },
@@ -21,7 +22,7 @@ const TYPE_COLORS = {
 const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, organization } = useAuth();
   const { branding } = useOrganization();
   const [stats, setStats] = useState({ minutes: 0, agendas: 0, members: 0, events: 0, actionItems: 0 });
   const [recentMinutes, setRecentMinutes] = useState([]);
@@ -103,6 +104,9 @@ export default function DashboardPage() {
 
   return (
     <div style={{ padding: 32 }}>
+      {/* Trial / billing status banner */}
+      <TrialBanner organization={organization} isAdmin={profile?.role === 'admin'} />
+
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1e293b', margin: '0 0 4px' }}>
@@ -281,3 +285,84 @@ function Step({ done, label, to }) {
     </div>
   );
 }
+function TrialBanner({ organization, isAdmin }) {
+  const navigate = useNavigate();
+  if (!organization) return null;
+  if (organization.is_permanently_comped) return null;
+  if (organization.subscription_status === 'active') return null;
+
+  const daysRemaining = organization.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(organization.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
+  const expired = organization.subscription_status !== 'trialing' || daysRemaining === 0;
+
+  if (expired) {
+    return (
+      <div style={{
+        background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8,
+        padding: '12px 20px', marginBottom: 24, display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      }}>
+        <div style={{ fontSize: 14, color: '#7F1D1D' }}>
+          🔒 Your trial has ended. Subscribe to restore full access.
+        </div>
+        {isAdmin && (
+          <button onClick={() => navigate('/billing')} style={{
+            padding: '7px 16px', background: '#9B1C1C', color: 'white',
+            border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}>
+            Subscribe Now
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (daysRemaining <= 7) {
+    return (
+      <div style={{
+        background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8,
+        padding: '12px 20px', marginBottom: 24, display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      }}>
+        <div style={{ fontSize: 14, color: '#78350F' }}>
+          ⏱ Your free trial ends in <strong>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</strong>.
+        </div>
+        {isAdmin && (
+          <button onClick={() => navigate('/billing')} style={{
+            padding: '7px 16px', background: '#92400E', color: 'white',
+            border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}>
+            Subscribe Now
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // More than 7 days left — subtle info bar, no urgency
+  return (
+    <div style={{
+      background: '#EDF7F1', border: '1px solid #B8DCC8', borderRadius: 8,
+      padding: '10px 20px', marginBottom: 24, display: 'flex',
+      alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+    }}>
+      <div style={{ fontSize: 13, color: '#0A3228' }}>
+        Free trial — <strong>{daysRemaining} days</strong> remaining.
+      </div>
+      {isAdmin && (
+        <button onClick={() => navigate('/billing')} style={{
+          padding: '5px 14px', background: 'transparent', color: '#105040',
+          border: '1px solid #105040', borderRadius: 6, fontSize: 13,
+          fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          View Plans
+        </button>
+      )}
+    </div>
+  );
+}
+

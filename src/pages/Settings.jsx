@@ -10,6 +10,7 @@ const TABS = [
   { id: 'subcommittees', label: 'Subcommittees' },
   { id: 'accounts', label: 'Financial Accounts' },
   { id: 'meetings', label: 'Meeting Types' },
+  { id: 'billing', label: 'Billing' },
 ];
 
 const LOGO_POSITIONS = [
@@ -289,7 +290,7 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {saved && <span style={{ color: '#059669', fontSize: 13, fontWeight: 500 }}>Saved!</span>}
           {error && <span style={{ color: '#dc2626', fontSize: 13 }}>{error}</span>}
-          {activeTab !== 'subcommittees' && activeTab !== 'accounts' && (
+          {activeTab !== 'subcommittees' && activeTab !== 'accounts' && activeTab !== 'billing' && (
             <button onClick={handleSave} disabled={saving} style={{
               padding: '10px 24px', background: '#1e293b', color: 'white', border: 'none',
               borderRadius: 6, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1,
@@ -590,7 +591,10 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
           </Card>
         </div>
       )}
-
+{/* BILLING */}
+      {activeTab === 'billing' && (
+        <BillingTab organization={organization} supabase={supabase} />
+      )}
       {/* SUBCOMMITTEE MODAL */}
       {editingSC && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setEditingSC(null)}>
@@ -769,6 +773,123 @@ function Field({ label, hint, children }) {
       <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>{label}</label>
       {children}
       {hint && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function BillingTab({ organization, supabase }) {
+  const [loadingPortal, setLoadingPortal] = useState(false);
+  const [portalError, setPortalError] = useState(null);
+
+  const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL?.replace(
+    '.supabase.co', '.supabase.co/functions/v1'
+  );
+
+  const handlePortal = async () => {
+    setPortalError(null);
+    setLoadingPortal(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-portal-session`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
+      window.location.href = data.url;
+    } catch (err) {
+      setPortalError(err.message);
+    } finally {
+      setLoadingPortal(false);
+    }
+  };
+
+  if (!organization) return null;
+
+  const { is_permanently_comped, subscription_status, trial_ends_at, stripe_customer_id } = organization;
+
+  const daysRemaining = trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
+  const statusLabel = {
+    comped:    { text: 'Complimentary — no charge', color: '#166534', bg: '#dcfce7' },
+    active:    { text: 'Active', color: '#166534', bg: '#dcfce7' },
+    trialing:  { text: daysRemaining > 0 ? `Free trial — ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining` : 'Trial expired', color: daysRemaining > 0 ? '#92400E' : '#9B1C1C', bg: daysRemaining > 0 ? '#fef3c7' : '#fee2e2' },
+    past_due:  { text: 'Past due — payment required', color: '#9B1C1C', bg: '#fee2e2' },
+    canceled:  { text: 'Canceled', color: '#9B1C1C', bg: '#fee2e2' },
+  }[subscription_status] || { text: subscription_status, color: '#64748b', bg: '#f1f5f9' };
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <Card title="Subscription">
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 6 }}>Current status</div>
+          <span style={{
+            display: 'inline-block', padding: '4px 12px', borderRadius: 20,
+            fontSize: 13, fontWeight: 600, background: statusLabel.bg, color: statusLabel.color,
+          }}>
+            {statusLabel.text}
+          </span>
+        </div>
+
+        {is_permanently_comped ? (
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+            This organization is a founding partner and has complimentary access. No billing required.
+          </p>
+        ) : subscription_status === 'active' && stripe_customer_id ? (
+          <div>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              Manage your payment method, view invoices, or cancel your subscription through the billing portal.
+            </p>
+            {portalError && (
+              <div style={{ fontSize: 13, color: '#9B1C1C', background: '#fee2e2', padding: '8px 12px', borderRadius: 6, marginBottom: 12 }}>
+                {portalError}
+              </div>
+            )}
+            <button onClick={handlePortal} disabled={loadingPortal} style={{
+              padding: '10px 20px', background: '#105040', color: 'white',
+              border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600,
+              cursor: loadingPortal ? 'wait' : 'pointer', opacity: loadingPortal ? 0.7 : 1,
+            }}>
+              {loadingPortal ? 'Opening portal…' : 'Manage Billing →'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              {subscription_status === 'trialing' && daysRemaining > 0
+                ? 'Subscribe before your trial ends to keep access to your minutes and records.'
+                : 'Your trial has ended. Subscribe to restore access.'}
+            </p>
+            <a href="/billing" style={{
+              display: 'inline-block', padding: '10px 20px', background: '#105040',
+              color: 'white', borderRadius: 6, fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              View Plans →
+            </a>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Plan Details">
+        <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.8 }}>
+          <div>All plans include unlimited users, unlimited minutes, PDF export, and email distribution.</div>
+          <div style={{ marginTop: 8 }}>
+            Questions about your plan?{' '}
+            <a href="mailto:christine@riverhousedairy.com" style={{ color: '#105040' }}>
+              Contact support
+            </a>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
