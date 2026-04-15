@@ -15,6 +15,7 @@ const DistributionListPage = React.lazy(() => import('./pages/DistributionList')
 const EmailHistoryPage = React.lazy(() => import('./pages/EmailHistory'));
 const TermsPage = React.lazy(() => import('./pages/legal/Terms'));
 const PrivacyPage = React.lazy(() => import('./pages/legal/Privacy'));
+const BillingPage = React.lazy(() => import('./pages/Billing'));
 
 // Eagerly load lightweight/critical-path pages
 import LoginPage from './pages/Login';
@@ -153,6 +154,31 @@ function RoleGuard({ minRole, children }) {
 
   return children;
 }
+/**
+ * SubscriptionGate — checks whether the org's subscription is active.
+ * Comped orgs (is_permanently_comped = true) are always allowed through.
+ * Active subscriptions pass. Trialing orgs pass until trial_ends_at.
+ * Expired trials, past_due, and canceled subscriptions redirect to /billing.
+ *
+ * This wraps all protected routes EXCEPT /billing itself, which must remain
+ * accessible to authenticated users whose subscription has lapsed.
+ */
+function SubscriptionGate() {
+  const { organization } = useAuth();
+
+  if (!organization) return <Outlet />;
+
+  const { is_permanently_comped, subscription_status, trial_ends_at } = organization;
+
+  const isActive =
+    is_permanently_comped ||
+    subscription_status === 'active' ||
+    subscription_status === 'comped' ||
+    (subscription_status === 'trialing' && new Date(trial_ends_at) > new Date());
+
+  if (!isActive) return <Navigate to="/billing" replace />;
+  return <Outlet />;
+}
 
 /**
  * BUG-061 FIX: App is now wrapped in a single AuthProvider.
@@ -180,26 +206,38 @@ export default function App() {
               
               <Route path="/privacy" element={<React.Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}><PrivacyPage /></React.Suspense>} />
 
-              {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
+             {/* Protected routes — BUG-086 FIX: Role guards on write/admin routes */}
               <Route element={<ProtectedLayout />}>
-                {/* Viewer+ (all authenticated users) */}
-                <Route path="minutes" element={<MinutesArchivePage />} />
-                <Route path="minutes/:id" element={<MinutesEditPage />} />
-                <Route path="agendas" element={<AgendasListPage />} />
-                <Route path="agendas/:id" element={<AgendaEditPage />} />
-                <Route path="events" element={<EventsListPage />} />
-                <Route path="events/:id" element={<EventEditPage />} />
-                <Route path="email-history" element={<EmailHistoryPage />} />
 
-                {/* Editor+ (admin or editor) */}
-                <Route path="minutes/new" element={<RoleGuard minRole="editor"><MinutesEditPage /></RoleGuard>} />
-                <Route path="agendas/new" element={<RoleGuard minRole="editor"><AgendaEditPage /></RoleGuard>} />
-                <Route path="events/new" element={<RoleGuard minRole="editor"><EventEditPage /></RoleGuard>} />
+                {/* /billing is inside ProtectedLayout (user must be logged in)
+                    but OUTSIDE SubscriptionGate (accessible even if subscription lapsed) */}
+                <Route path="billing" element={
+                  <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Loading...</div>}>
+                    <BillingPage />
+                  </Suspense>
+                } />
 
-                {/* Admin only */}
-                <Route path="members" element={<RoleGuard minRole="admin"><MembersPage /></RoleGuard>} />
-                <Route path="distribution" element={<RoleGuard minRole="admin"><DistributionListPage /></RoleGuard>} />
-                <Route path="settings" element={<RoleGuard minRole="admin"><SettingsPage /></RoleGuard>} />
+                {/* All other protected routes require an active subscription */}
+                <Route element={<SubscriptionGate />}>
+                  {/* Viewer+ (all authenticated users) */}
+                  <Route path="minutes" element={<MinutesArchivePage />} />
+                  <Route path="minutes/:id" element={<MinutesEditPage />} />
+                  <Route path="agendas" element={<AgendasListPage />} />
+                  <Route path="agendas/:id" element={<AgendaEditPage />} />
+                  <Route path="events" element={<EventsListPage />} />
+                  <Route path="events/:id" element={<EventEditPage />} />
+                  <Route path="email-history" element={<EmailHistoryPage />} />
+
+                  {/* Editor+ (admin or editor) */}
+                  <Route path="minutes/new" element={<RoleGuard minRole="editor"><MinutesEditPage /></RoleGuard>} />
+                  <Route path="agendas/new" element={<RoleGuard minRole="editor"><AgendaEditPage /></RoleGuard>} />
+                  <Route path="events/new" element={<RoleGuard minRole="editor"><EventEditPage /></RoleGuard>} />
+
+                  {/* Admin only */}
+                  <Route path="members" element={<RoleGuard minRole="admin"><MembersPage /></RoleGuard>} />
+                  <Route path="distribution" element={<RoleGuard minRole="admin"><DistributionListPage /></RoleGuard>} />
+                  <Route path="settings" element={<RoleGuard minRole="admin"><SettingsPage /></RoleGuard>} />
+                </Route>
 
               </Route>
               {/* Catch-all: unknown routes redirect home */}
