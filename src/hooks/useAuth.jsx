@@ -122,13 +122,18 @@ export function AuthProvider({ children }) {
     return { error };
   }, []);
 
+  const getAccessToken = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token ?? null;
+  }, []);
+
   const value = {
     user, profile, loadingSlow,
     organization: profile?.organization ?? null,
     loading,
     isAdmin: profile?.role === 'admin',
     isEditor: profile?.role === 'admin' || profile?.role === 'editor',
-    signUp, signUpWithInvite, signIn, signOut,
+    signUp, signUpWithInvite, signIn, signOut, getAccessToken,
   };
 
   return (

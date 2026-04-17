@@ -36,10 +36,9 @@ function getTrialStatus(organization) {
 // ─── Main Component ────────────────────────────────────────────────────────
 
 export default function BillingPage() {
-  const { profile, organization } = useAuth();
+  const { profile, organization, getAccessToken } = useAuth();
   const [loadingPlan, setLoadingPlan] = useState(null); // 'monthly' | 'annual' | 'portal'
   const [error, setError] = useState(null);
-const { user } = useAuth();
   const trialStatus = getTrialStatus(organization);
   const daysRemaining = getDaysRemaining(organization?.trial_ends_at);
   const isAdmin = profile?.role === 'admin';
@@ -49,8 +48,7 @@ const { user } = useAuth();
     setError(null);
     setLoadingPlan(planKey);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token ?? (await supabase.auth.refreshSession())?.data?.session?.access_token;
+     const token = await getAccessToken();
       if (!token) throw new Error('Session expired. Please sign in again.');
 
       const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
@@ -79,9 +77,8 @@ const { user } = useAuth();
     setError(null);
     setLoadingPlan('portal');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated');
+      const token = await getAccessToken();
+      if (!token) throw new Error('Session expired. Please sign in again.');
 
       const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-portal-session`, {
         method: 'POST',
