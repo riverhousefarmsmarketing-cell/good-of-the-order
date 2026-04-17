@@ -17,6 +17,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingSlow, setLoadingSlow] = useState(false);
   const fetchingRef = useRef(false);
@@ -52,6 +53,7 @@ export function AuthProvider({ children }) {
       if (!mounted) return;
       if (session?.user) {
         setUser(session.user);
+        setAccessToken(session.access_token ?? null);
         fetchProfile(session.user.id);
       } else {
         setUser(null);
@@ -68,6 +70,7 @@ export function AuthProvider({ children }) {
 
         const currentUser = session?.user ?? null;
         setUser(currentUser);
+        setAccessToken(session?.access_token ?? null);
         if (currentUser) {
           fetchingRef.current = false;
           fetchProfile(currentUser.id);
@@ -128,12 +131,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = {
-    user, profile, loadingSlow,
+    user, profile, loadingSlow, accessToken,
     organization: profile?.organization ?? null,
     loading,
     isAdmin: profile?.role === 'admin',
     isEditor: profile?.role === 'admin' || profile?.role === 'editor',
-    signUp, signUpWithInvite, signIn, signOut, getAccessToken,
+    signUp, signUpWithInvite, signIn, signOut,
   };
 
   return (

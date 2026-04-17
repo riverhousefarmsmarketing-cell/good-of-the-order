@@ -36,7 +36,7 @@ function getTrialStatus(organization) {
 // ─── Main Component ────────────────────────────────────────────────────────
 
 export default function BillingPage() {
-  const { profile, organization, getAccessToken } = useAuth();
+  const { profile, organization, accessToken } = useAuth();
   const [loadingPlan, setLoadingPlan] = useState(null); // 'monthly' | 'annual' | 'portal'
   const [error, setError] = useState(null);
   const trialStatus = getTrialStatus(organization);
@@ -48,7 +48,7 @@ export default function BillingPage() {
     setError(null);
     setLoadingPlan(planKey);
     try {
-     const token = await getAccessToken();
+     const token = accessToken;
       if (!token) throw new Error('Session expired. Please sign in again.');
 
       const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
@@ -77,7 +77,7 @@ export default function BillingPage() {
     setError(null);
     setLoadingPlan('portal');
     try {
-      const token = await getAccessToken();
+      const token = accessToken;
       if (!token) throw new Error('Session expired. Please sign in again.');
 
       const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-portal-session`, {
