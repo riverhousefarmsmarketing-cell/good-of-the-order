@@ -8,8 +8,8 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
 const PRICE_IDS = {
-  monthly: 'price_1TMXlG7rIwjFQ2JVISU3hcnN',
-  annual:  'price_1TMXlq7rIwjFQ2JVwyZ47NkK',
+  monthly: 'price_1TNMirFlE531XMxPFH3zQ9Fc',
+  annual:  'price_1TNMjMFlE531XMxPH96c1K4I',
 };
 
 const SUPABASE_FUNCTIONS_URL = 'https://qacoauhyahswkluayxhm.supabase.co/functions/v1';

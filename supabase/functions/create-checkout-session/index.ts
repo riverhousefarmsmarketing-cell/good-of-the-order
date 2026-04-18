@@ -14,8 +14,8 @@ const APP_URL = 'https://goodoftheorder.app'
 
 // Allowlist of valid live Price IDs — never trust a client-supplied price
 const VALID_PRICE_IDS = new Set([
-  'price_1TMXlG7rIwjFQ2JVISU3hcnN', // Monthly $39/mo
-  'price_1TMXlq7rIwjFQ2JVwyZ47NkK', // Annual  $348/yr
+  'price_1TNMirFlE531XMxPFH3zQ9Fc', // Monthly $39/mo
+  'price_1TNMjMFlE531XMxPH96c1K4I', // Annual  $348/yr
 ])
 
 const ALLOWED_ORIGINS = [
