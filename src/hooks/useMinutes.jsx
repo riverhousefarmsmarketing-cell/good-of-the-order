@@ -113,6 +113,7 @@ export function useMinutes({ autoFetch = true } = {}) {
     return {
       ...mins,
       _loaded_at: mins.updated_at,
+      _lock_version: mins.lock_version, // optimistic concurrency token (025)
       attendance: att || [],
       businessItems: biz || [],
       actionItems: actions || [],
@@ -144,6 +145,7 @@ export function useMinutes({ autoFetch = true } = {}) {
     const p_minutes = {
       id: mainData.id || null,
       _loaded_at: mainData._loaded_at || null,
+      _lock_version: mainData._lock_version ?? null, // 025: precision-safe optimistic lock
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       agenda_id: mainData.agenda_id || null,
@@ -267,7 +269,8 @@ const minutesId = rpcResult.id;
     }
 
     // BUG-819 FIX: Return updated_at so caller can set _loaded_at for optimistic locking
-    return { id: minutesId, updated_at: serverUpdatedAt };
+    // 025: also return lock_version so the caller can set _lock_version for the next save
+    return { id: minutesId, updated_at: serverUpdatedAt, lock_version: rpcResult.lock_version };
   }, []);
 
   const deleteMinutes = useCallback(async (id) => {
@@ -303,6 +306,7 @@ const minutesId = rpcResult.id;
       revision_of: originalId,
       revision_number: revisionNumber,
       _loaded_at: null,
+      _lock_version: null, // new record
       approved_by: null,
       approved_at: null,
     };

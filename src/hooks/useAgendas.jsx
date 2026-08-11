@@ -41,17 +41,18 @@ export function useAgendas({ autoFetch = true } = {}) {
       supabase.from('agenda_items').select('*').eq('agenda_id', id).order('sort_order'),
     ]);
     if (aErr || !agenda) return null;
-    return { ...agenda, _loaded_at: agenda.updated_at, items: items || [] };
+    return { ...agenda, _loaded_at: agenda.updated_at, _lock_version: agenda.lock_version, items: items || [] };
   }, []);
 
   const saveAgenda = useCallback(async (agendaData) => {
-    const { items = [], _loaded_at, ...mainData } = agendaData;
+    const { items = [], _loaded_at, _lock_version, ...mainData } = agendaData;
 
     const p_agenda = {
       id: mainData.id || null,
       // CR-011 FIX: Pass _loaded_at through for optimistic locking
       // Fixed: _loaded_at was destructured separately, so mainData._loaded_at was always undefined
       _loaded_at: _loaded_at || null,
+      _lock_version: _lock_version ?? null, // 025: precision-safe optimistic lock
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       meeting_date: mainData.meeting_date || null,
@@ -78,7 +79,7 @@ export function useAgendas({ autoFetch = true } = {}) {
     });
 
     if (error) throw new Error(error.message || JSON.stringify(error));
-    return { id: result.id, updated_at: result.updated_at };
+    return { id: result.id, updated_at: result.updated_at, lock_version: result.lock_version };
   }, []);
 
   const deleteAgenda = useCallback(async (id) => {

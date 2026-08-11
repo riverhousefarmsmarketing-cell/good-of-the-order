@@ -103,6 +103,31 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 'No email body provided', 400)
     }
 
+    // ── Step 4b: Validate recipients belong to this org ────────────────
+    // Recipients must be org members or distribution contacts of the caller's
+    // org. Without this, an authenticated editor could send arbitrary HTML to
+    // any external address from the org's verified sending domain (the UI only
+    // ever offers org-scoped addresses, so this rejects nothing legitimate).
+    const [{ data: orgContacts }, { data: orgMembers }] = await Promise.all([
+      supabaseAdmin.from('distribution_contacts').select('email').eq('organization_id', org_id),
+      supabaseAdmin.from('members').select('email').eq('organization_id', org_id),
+    ])
+    const allowedEmails = new Set(
+      [...(orgContacts || []), ...(orgMembers || [])]
+        .map((r: { email: string | null }) => (r.email || '').toLowerCase().trim())
+        .filter(Boolean)
+    )
+    const invalidRecipients = (to as string[])
+      .map((e) => String(e || '').toLowerCase().trim())
+      .filter((e) => !allowedEmails.has(e))
+    if (invalidRecipients.length > 0) {
+      return errorResponse(
+        corsHeaders,
+        `Recipient(s) not in your organization's members or distribution list: ${invalidRecipients.join(', ')}`,
+        400
+      )
+    }
+
     // ── Step 5: CR-007 FIX — Validate document ownership ──────────────
     if (document_id && document_type) {
       const tableName = document_type === 'minutes' ? 'minutes' : 'agendas'
