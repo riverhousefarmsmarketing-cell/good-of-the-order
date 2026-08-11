@@ -5,6 +5,7 @@ import { useMinutes } from '../hooks/useMinutes.jsx';
 import { useMembers } from '../hooks/useMembers.jsx';
 import { useOrganization } from '../hooks/useOrganization.jsx';
 import { supabase } from '../lib/supabase';
+import { todayISO } from '../lib/dates';
 import SendEmailModal from '../components/email/SendEmailModal.jsx';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -89,7 +90,7 @@ const { toast } = useToast();
     if (isNew) {
       setDraft({
         meeting_type: 'BOARD',
-        meeting_date: new Date().toISOString().split('T')[0],
+        meeting_date: todayISO(),
         meeting_time: '', location: '', status: 'draft',
         facilitator_id: null, recorder_id: null,
         time_called_to_order: '', time_adjourned: '',
@@ -145,7 +146,7 @@ const { toast } = useToast();
       setScMemberIds(null);
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayISO();
 
     // Board meetings: show ALL next 6 upcoming events
     // Subcommittee meetings: show next 6 events for THAT subcommittee
@@ -241,8 +242,15 @@ const { toast } = useToast();
   };
 
   const handleDelete = async () => {
-    await deleteMinutes(draft.id);
-    navigate('/minutes');
+    try {
+      await deleteMinutes(draft.id);
+      toast.success('Minutes deleted.');
+      navigate('/minutes');
+    } catch (err) {
+      // Was silent: a rejected delete (RLS/FK/network) left the user with no
+      // feedback and the record still present.
+      toast.error(`Delete failed: ${err.message || 'Please try again.'}`);
+    }
   };
 
   // Formal revision: clone approved minutes into a new draft revision

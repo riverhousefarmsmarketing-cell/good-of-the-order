@@ -127,8 +127,15 @@ const isNew = !id;
   };
 
   const handleDelete = async () => {
-    await deleteAgenda(draft.id);
-    navigate('/agendas');
+    try {
+      await deleteAgenda(draft.id);
+      toast.success('Agenda deleted.');
+      navigate('/agendas');
+    } catch (err) {
+      // Was silent: a rejected delete (RLS/FK/network) left the user with no
+      // feedback and the agenda still present.
+      toast.error(`Delete failed: ${err.message || 'Please try again.'}`);
+    }
   };
 
   const addItem = () => {

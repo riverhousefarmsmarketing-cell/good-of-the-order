@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { todayISO } from '../lib/dates';
 
 /**
  * Hook for minutes CRUD operations.
@@ -147,7 +148,7 @@ export function useMinutes({ autoFetch = true } = {}) {
       subcommittee_id: mainData.subcommittee_id || null,
       agenda_id: mainData.agenda_id || null,
       status: mainData.status || 'draft',
-      meeting_date: mainData.meeting_date || new Date().toISOString().split('T')[0],
+      meeting_date: mainData.meeting_date || todayISO(),
       meeting_time: mainData.meeting_time || null,
       location: mainData.location || null,
       facilitator_id: mainData.facilitator_id || null,
@@ -308,11 +309,14 @@ const minutesId = rpcResult.id;
 
     const result = await saveMinutes(revisionData);
 
-    // Mark the original as 'revised' (superseded)
-    await supabase
+    // Mark the original as 'revised' (superseded). Surface a failure here:
+    // if this silently failed, the DB kept the original 'approved' while the
+    // UI showed 'revised', leaving two live copies with no error.
+    const { error: supersedeErr } = await supabase
       .from('minutes')
       .update({ status: 'revised' })
       .eq('id', originalId);
+    if (supersedeErr) throw supersedeErr;
 
     // Update local list to reflect the status change
     setMinutesList(prev => prev.map(m =>
