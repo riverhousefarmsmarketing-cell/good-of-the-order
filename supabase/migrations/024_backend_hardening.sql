@@ -9,8 +9,9 @@
 --        different 018_* migrations created divergent policy sets (admin-only
 --        vs admin+editor) and one wired an updated_at trigger to a
 --        non-existent function (update_updated_at_column). This makes the
---        policies + trigger deterministic. Forward-only — the historical
---        duplicate 018_*/019_* files are left as applied history.
+--        policies + trigger deterministic. (The duplicate 018 file has since
+--        been consolidated into 018_organization_accounts; this migration is
+--        still what establishes the final policies + trigger on the live DB.)
 -- Depends on: 023_stripe_billing
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -122,7 +123,7 @@ CREATE POLICY "Admin can delete org accounts"
     AND is_email_verified()
   );
 
--- Repair the updated_at trigger: 018_organization_accounts_and_fix_accounts_rpc
+-- Repair the updated_at trigger: the removed duplicate 018 (…_fix_accounts_rpc)
 -- wired it to update_updated_at_column(), which does not exist (the real
 -- functions are update_updated_at() from 001 and set_updated_at() from 007).
 DROP TRIGGER IF EXISTS set_updated_at_org_accounts ON organization_accounts;
