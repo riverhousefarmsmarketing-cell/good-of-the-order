@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { todayISO } from '../lib/dates';
 
 /**
  * Hook for minutes CRUD operations.
@@ -112,6 +113,7 @@ export function useMinutes({ autoFetch = true } = {}) {
     return {
       ...mins,
       _loaded_at: mins.updated_at,
+      _lock_version: mins.lock_version, // optimistic concurrency token (025)
       attendance: att || [],
       businessItems: biz || [],
       actionItems: actions || [],
@@ -143,11 +145,12 @@ export function useMinutes({ autoFetch = true } = {}) {
     const p_minutes = {
       id: mainData.id || null,
       _loaded_at: mainData._loaded_at || null,
+      _lock_version: mainData._lock_version ?? null, // 025: precision-safe optimistic lock
       meeting_type: mainData.meeting_type || 'BOARD',
       subcommittee_id: mainData.subcommittee_id || null,
       agenda_id: mainData.agenda_id || null,
       status: mainData.status || 'draft',
-      meeting_date: mainData.meeting_date || new Date().toISOString().split('T')[0],
+      meeting_date: mainData.meeting_date || todayISO(),
       meeting_time: mainData.meeting_time || null,
       location: mainData.location || null,
       facilitator_id: mainData.facilitator_id || null,
@@ -266,7 +269,8 @@ const minutesId = rpcResult.id;
     }
 
     // BUG-819 FIX: Return updated_at so caller can set _loaded_at for optimistic locking
-    return { id: minutesId, updated_at: serverUpdatedAt };
+    // 025: also return lock_version so the caller can set _lock_version for the next save
+    return { id: minutesId, updated_at: serverUpdatedAt, lock_version: rpcResult.lock_version };
   }, []);
 
   const deleteMinutes = useCallback(async (id) => {
@@ -302,17 +306,21 @@ const minutesId = rpcResult.id;
       revision_of: originalId,
       revision_number: revisionNumber,
       _loaded_at: null,
+      _lock_version: null, // new record
       approved_by: null,
       approved_at: null,
     };
 
     const result = await saveMinutes(revisionData);
 
-    // Mark the original as 'revised' (superseded)
-    await supabase
+    // Mark the original as 'revised' (superseded). Surface a failure here:
+    // if this silently failed, the DB kept the original 'approved' while the
+    // UI showed 'revised', leaving two live copies with no error.
+    const { error: supersedeErr } = await supabase
       .from('minutes')
       .update({ status: 'revised' })
       .eq('id', originalId);
+    if (supersedeErr) throw supersedeErr;
 
     // Update local list to reflect the status change
     setMinutesList(prev => prev.map(m =>

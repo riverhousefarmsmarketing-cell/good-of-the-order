@@ -188,13 +188,17 @@ const [deleteScTarget, setDeleteScTarget] = useState(null);
         if (err) throw err;
         scId = editingSC;
       }
-      // Sync members
-      await supabase.from('subcommittee_members').delete().eq('subcommittee_id', scId);
+      // Sync members. Check these errors: supabase-js does not throw, so a
+      // returned { error } here (RLS/constraint) was invisible and the roster
+      // was silently lost while the save reported success.
+      const { error: delMembersErr } = await supabase.from('subcommittee_members').delete().eq('subcommittee_id', scId);
+      if (delMembersErr) throw delMembersErr;
       let memberIds = [...scForm.memberIds];
       if (scForm.chair_id && !memberIds.includes(scForm.chair_id)) memberIds.push(scForm.chair_id);
       if (memberIds.length > 0) {
         const rows = memberIds.map(mid => ({ subcommittee_id: scId, member_id: mid }));
-        await supabase.from('subcommittee_members').insert(rows);
+        const { error: insMembersErr } = await supabase.from('subcommittee_members').insert(rows);
+        if (insMembersErr) throw insMembersErr;
       }
       await fetchSubcommittees();
       setEditingSC(null);

@@ -1,4 +1,4 @@
--- Migration: 018_organization_accounts_and_accounts_jsonb
+-- Migration: 018_organization_accounts
 -- Date: 2026-02-27 (applied to live DB), 2026-03-04 (committed to repo)
 -- Description: Catch-up migration capturing changes applied directly to the
 --   live Supabase database on Feb 27. Creates the organization_accounts table
@@ -10,6 +10,14 @@
 -- NOTE: If running against the live database where these changes already exist,
 -- the CREATE TABLE will fail. Use IF NOT EXISTS and CREATE OR REPLACE to make
 -- this migration idempotent.
+--
+-- CONSOLIDATION (2026-08-11): a duplicate migration numbered 018
+-- (018_organization_accounts_and_fix_accounts_rpc.sql) was removed. It applied
+-- the same table plus admin/editor policies and an updated_at trigger wired to a
+-- non-existent function (update_updated_at_column), which broke a fresh
+-- `supabase db reset`. Its intended end-state now lives in 024_backend_hardening
+-- (deterministic policies + correct trigger) and 025 (save_*_atomic). This file
+-- is the single 018.
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 1. Organization Accounts table

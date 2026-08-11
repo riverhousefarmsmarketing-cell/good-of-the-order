@@ -103,6 +103,31 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 'No email body provided', 400)
     }
 
+    // ── Step 4b: Validate recipients belong to this org ────────────────
+    // Recipients must be org members or distribution contacts of the caller's
+    // org. Without this, an authenticated editor could send arbitrary HTML to
+    // any external address from the org's verified sending domain (the UI only
+    // ever offers org-scoped addresses, so this rejects nothing legitimate).
+    const [{ data: orgContacts }, { data: orgMembers }] = await Promise.all([
+      supabaseAdmin.from('distribution_contacts').select('email').eq('organization_id', org_id),
+      supabaseAdmin.from('members').select('email').eq('organization_id', org_id),
+    ])
+    const allowedEmails = new Set(
+      [...(orgContacts || []), ...(orgMembers || [])]
+        .map((r: { email: string | null }) => (r.email || '').toLowerCase().trim())
+        .filter(Boolean)
+    )
+    const invalidRecipients = (to as string[])
+      .map((e) => String(e || '').toLowerCase().trim())
+      .filter((e) => !allowedEmails.has(e))
+    if (invalidRecipients.length > 0) {
+      return errorResponse(
+        corsHeaders,
+        `Recipient(s) not in your organization's members or distribution list: ${invalidRecipients.join(', ')}`,
+        400
+      )
+    }
+
     // ── Step 5: CR-007 FIX — Validate document ownership ──────────────
     if (document_id && document_type) {
       const tableName = document_type === 'minutes' ? 'minutes' : 'agendas'
@@ -132,13 +157,24 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 'Rate limit exceeded. Maximum 20 emails per hour per organization.', 429)
     }
 
-    // ── Step 7: Sanitize HTML — strip script tags and event handlers ───
-    // NOTE: CR-008 recommends replacing regex with a proper sanitization
-    // library (e.g., DOMPurify). This is a medium-priority improvement.
+    // ── Step 7: Sanitize HTML — defense-in-depth ───────────────────────
+    // Primary defense is at the source: the client email builders
+    // (generateMinutesEmailHtml / generateAgendaEmailHtml) HTML-escape every
+    // user-entered field before assembling this body, so it does not contain
+    // raw user markup. This server-side pass is a secondary net that strips
+    // active content in case a future caller sends a less-sanitized body. A
+    // full DOM sanitizer (DOMPurify) needs a DOM that the Deno runtime lacks,
+    // so we use a conservative allowlist-style strip rather than pull in a
+    // heavyweight jsdom/linkedom dependency.
     const sanitizedHtml = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      // Dangerous elements
+      .replace(/<\s*(script|iframe|object|embed|form|link|meta|base|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/<\s*(script|iframe|object|embed|form|link|meta|base|style)\b[^>]*\/?>/gi, '')
+      // Inline event handlers (on*=)
       .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
       .replace(/\son\w+\s*=\s*\S+/gi, '')
+      // javascript:/vbscript:/data: URIs in attributes
+      .replace(/(href|src|xlink:href)\s*=\s*(["'])\s*(?:javascript|vbscript|data)\s*:[^"']*\2/gi, '$1="#"')
 
     // ── Step 8: Send via Resend ────────────────────────────────────────
     const fromEmail = `${from_name || 'GoodOfTheOrder'} <notifications@goodoftheorder.app>`

@@ -3,7 +3,7 @@
 -- Description: Catch-up migration documenting the `members` table that was
 --   created via the Supabase dashboard. This file brings schema version control
 --   up to date (OPS-8 compliance). No structural changes — documents existing state.
--- Depends on: 018_organization_accounts_and_fix_accounts_rpc
+-- Depends on: 018_organization_accounts
 
 -- ============================================================
 -- MEMBERS TABLE (board directory — exists independently of auth accounts)

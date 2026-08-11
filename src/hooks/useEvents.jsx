@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { todayISO } from '../lib/dates';
 
 /**
  * BUG-061 FIX: Added autoFetch option + fetch guard.
@@ -85,7 +86,11 @@ export function useEvents({ autoFetch = true } = {}) {
 
     // Sync vendors
     if (vendors) {
-      await supabase.from('event_vendors').delete().eq('event_id', eventId);
+      // Surface sync failures instead of swallowing them: the event row is
+      // already saved, so a silently-dropped vendor list looked like success
+      // to the user while their vendor/speaker data was lost on reload.
+      const { error: delErr } = await supabase.from('event_vendors').delete().eq('event_id', eventId);
+      if (delErr) throw delErr;
       if (vendors.length > 0) {
         const vendorRows = vendors.map(v => ({
           event_id: eventId,
@@ -98,7 +103,7 @@ export function useEvents({ autoFetch = true } = {}) {
           budget: v.budget || null,
         }));
         const { error } = await supabase.from('event_vendors').insert(vendorRows);
-        if (error) console.error('Vendor insert error:', error);
+        if (error) throw error;
       }
     }
 
@@ -129,7 +134,7 @@ export function useEvents({ autoFetch = true } = {}) {
 
   // Fetch next N upcoming events (for board minutes display)
   const fetchUpcomingEvents = useCallback(async (limit = 6) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayISO();
     const { data, error } = await supabase
       .from('events')
       .select('id, name, date, time, location, purpose, subcommittee_id, subcommittees(name)')

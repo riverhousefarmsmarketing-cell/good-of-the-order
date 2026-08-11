@@ -55,7 +55,19 @@ async function verifyStripeSignature(
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
 
-  return computed === signature
+  // Constant-time comparison to avoid leaking the signature via timing.
+  return timingSafeEqualHex(computed, signature)
+}
+
+// Length-independent HMAC hex comparison (both sides are fixed-length SHA-256
+// hex, so the early length check does not leak anything useful).
+function timingSafeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let mismatch = 0
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return mismatch === 0
 }
 
 // Map Stripe subscription statuses to our DB enum values

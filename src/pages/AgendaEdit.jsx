@@ -112,7 +112,7 @@ const isNew = !id;
       const result = await saveAgenda({ ...draft, status: status || draft.status });
       const newId = result.id;
       const newStatus = status || draft.status;
-      setDraft(prev => ({ ...prev, id: newId || prev.id, status: newStatus, _loaded_at: result.updated_at }));
+      setDraft(prev => ({ ...prev, id: newId || prev.id, status: newStatus, _loaded_at: result.updated_at, _lock_version: result.lock_version }));
       setIsDirty(false); // BUG-036: Clear dirty flag on success
       toast.success('Agenda saved.');
       if (isNew && newId) navigate('/agendas/' + newId, { replace: true });
@@ -127,8 +127,15 @@ const isNew = !id;
   };
 
   const handleDelete = async () => {
-    await deleteAgenda(draft.id);
-    navigate('/agendas');
+    try {
+      await deleteAgenda(draft.id);
+      toast.success('Agenda deleted.');
+      navigate('/agendas');
+    } catch (err) {
+      // Was silent: a rejected delete (RLS/FK/network) left the user with no
+      // feedback and the agenda still present.
+      toast.error(`Delete failed: ${err.message || 'Please try again.'}`);
+    }
   };
 
   const addItem = () => {
